@@ -16,27 +16,35 @@ public partial class MainViewModel : ObservableObject
     private readonly ISettingsService _settingsService;
     private readonly IDocxPlaceholderService _docxService;
     private readonly IDialogService _dialogService;
+    private readonly IStatsService _statsService;
     private readonly string _backupFilePath;
+    private readonly string _historyFilePath;
     private readonly DispatcherTimer _autoSaveTimer;
+    private const int MaxHistory = 50;
 
     public MainViewModel(
         ISettingsService settingsService,
         ITemplateRepository templateRepository,
         IDocxPlaceholderService docxService,
-        IDialogService dialogService)
+        IDialogService dialogService,
+        IStatsService statsService)
     {
         _settingsService = settingsService;
         _templateRepository = templateRepository;
         _docxService = docxService;
         _dialogService = dialogService;
+        _statsService = statsService;
 
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
         var folder = Path.Combine(appData, "Katib3omomy");
         Directory.CreateDirectory(folder);
         _backupFilePath = Path.Combine(folder, "draft_backup.json");
+        _historyFilePath = Path.Combine(folder, "generation_history.json");
 
         _autoSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
         _autoSaveTimer.Tick += async (_, _) => await SaveBackupAsync();
+
+        RefreshStats();
 
         FormFields.CollectionChanged += (_, e) =>
         {
@@ -95,6 +103,54 @@ public partial class MainViewModel : ObservableObject
         catch { }
     }
 
+    private async Task SaveHistoryAsync()
+    {
+        try
+        {
+            var json = JsonSerializer.Serialize(GenerationHistory.Take(MaxHistory).ToList(),
+                new JsonSerializerOptions { WriteIndented = true });
+            await File.WriteAllTextAsync(_historyFilePath, json);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ERROR] SaveHistory: {ex.Message}");
+        }
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        try
+        {
+            if (!File.Exists(_historyFilePath)) return;
+            var json = await File.ReadAllTextAsync(_historyFilePath);
+            var items = JsonSerializer.Deserialize<List<HistoryEntry>>(json);
+            if (items is null) return;
+            GenerationHistory.Clear();
+            foreach (var item in items)
+                GenerationHistory.Add(item);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ERROR] LoadHistory: {ex.Message}");
+        }
+    }
+
+    [RelayCommand]
+    private void OpenHistoryItem(HistoryEntry entry)
+    {
+        if (File.Exists(entry.FilePath))
+            _dialogService.OpenFile(entry.FilePath);
+        else
+            ErrorMessage = "الملف لم يعد موجوداً.";
+    }
+
+    [RelayCommand]
+    private void ClearHistory()
+    {
+        GenerationHistory.Clear();
+        _ = SaveHistoryAsync();
+    }
+
     private class BackupData
     {
         public string? TemplatePath { get; set; }
@@ -103,6 +159,7 @@ public partial class MainViewModel : ObservableObject
     }
 
     public ObservableCollection<string> RecentFolders { get; } = new();
+    public ObservableCollection<HistoryEntry> GenerationHistory { get; } = new();
 
     public void RefreshRecentFolders()
     {
@@ -160,7 +217,34 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private bool _isEditingTemplate;
 
+    [ObservableProperty]
+    private bool _isPrintPreview;
+
+    [ObservableProperty]
+    private TemplateMeta? _currentTemplateMeta;
+
+    [ObservableProperty]
+    private int _totalDocumentsGenerated;
+
+    [ObservableProperty]
+    private int _templateCount;
+
+    [ObservableProperty]
+    private string _usageTime = string.Empty;
+
+    private void RefreshStats()
+    {
+        TotalDocumentsGenerated = _statsService.Stats.TotalDocumentsGenerated;
+        TemplateCount = _statsService.GetTemplateCount();
+        UsageTime = _statsService.FormatUsageTime();
+    }
+
     partial void OnIsEditingTemplateChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanShowPreview));
+    }
+
+    partial void OnIsPrintPreviewChanged(bool value)
     {
         OnPropertyChanged(nameof(CanShowPreview));
     }
@@ -172,6 +256,7 @@ public partial class MainViewModel : ObservableObject
     private ObservableCollection<FileSystemEntry> _fileBrowserItems = new();
 
     public bool HasRecentFolders => RecentFolders.Count > 0;
+    public bool HasHistory => GenerationHistory.Count > 0;
     public bool CanGoUp => !string.IsNullOrEmpty(CurrentFolderPath) && Directory.GetParent(CurrentFolderPath) is not null;
 
     public IEnumerable<TemplateFile> FilteredTemplates =>
@@ -181,7 +266,8 @@ public partial class MainViewModel : ObservableObject
                 System.Globalization.CultureInfo.CurrentCulture.CompareInfo.IndexOf(
                     t.Name, SearchQuery, System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.IgnoreNonSpace) >= 0);
 
-    public bool CanShowPreview => SelectedTemplate is not null && LastGenerated is null && !IsParsingTemplate && !IsEditingTemplate;
+    public bool CanShowPreview => SelectedTemplate is not null && LastGenerated is null && !IsParsingTemplate && !IsEditingTemplate && !IsPrintPreview;
+    public bool CanShowPrintPreview => SelectedTemplate is not null && LastGenerated is null && !IsParsingTemplate && !IsEditingTemplate && IsPrintPreview;
     public bool CanShowEmpty => SelectedTemplate is null && !IsParsingTemplate;
     public bool HasFormFields => FormFields.Count > 0;
     public bool CanGenerate => HasFormFields && FormFields.All(f => !f.HasError);
@@ -213,6 +299,7 @@ public partial class MainViewModel : ObservableObject
         _autoSaveTimer.Stop();
         FormFields.Clear();
         ErrorMessage = null;
+        CurrentTemplateMeta = null;
         LastGenerated = null;
         DraftPreviewText = string.Empty;
         OriginalTemplateText = string.Empty;
@@ -221,11 +308,19 @@ public partial class MainViewModel : ObservableObject
 
         try
         {
+            var metaPath = System.IO.Path.ChangeExtension(template.FullPath, ".meta.json");
+            CurrentTemplateMeta = TemplateMeta.Load(metaPath);
+
             var placeholders = await _docxService.ExtractPlaceholdersAsync(template.FullPath);
             if (template != SelectedTemplate) return;
 
             foreach (var p in placeholders)
-                FormFields.Add(new PlaceholderField { Key = p, Value = string.Empty });
+            {
+                var value = string.Empty;
+                if (CurrentTemplateMeta?.Fields.TryGetValue(p, out var fieldMeta) == true && !string.IsNullOrEmpty(fieldMeta.Example))
+                    value = fieldMeta.Example;
+                FormFields.Add(new PlaceholderField { Key = p, Value = value });
+            }
 
             ProgressDescription = "جاري استخراج النص...";
 
@@ -276,6 +371,7 @@ public partial class MainViewModel : ObservableObject
     {
         await _settingsService.LoadAsync();
         RefreshRecentFolders();
+        await LoadHistoryAsync();
         if (!string.IsNullOrEmpty(_settingsService.TemplatesFolderPath))
         {
             var path = _settingsService.TemplatesFolderPath;
@@ -515,6 +611,18 @@ public partial class MainViewModel : ObservableObject
                 TemplateName = SelectedTemplate.Name
             };
 
+            GenerationHistory.Insert(0, new HistoryEntry
+            {
+                FilePath = resultPath,
+                FileName = System.IO.Path.GetFileName(resultPath),
+                GeneratedAt = DateTime.Now,
+                TemplateName = SelectedTemplate.Name
+            });
+            await SaveHistoryAsync();
+            OnPropertyChanged(nameof(HasHistory));
+
+            _statsService.RecordGeneration();
+            RefreshStats();
             _dialogService.ShowSuccess("تم بنجاح", $"تم إنشاء المستند بنجاح:\n{LastGenerated.FileName}");
             ClearBackup();
         }
@@ -562,6 +670,12 @@ public partial class MainViewModel : ObservableObject
     private void ToggleEditor()
     {
         IsEditingTemplate = !IsEditingTemplate;
+    }
+
+    [RelayCommand]
+    private void TogglePrintPreview()
+    {
+        IsPrintPreview = !IsPrintPreview;
     }
 
     [RelayCommand]

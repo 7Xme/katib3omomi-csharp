@@ -18,6 +18,15 @@
         PreviewDragOver="Window_PreviewDragOver"
         Drop="Window_Drop"
         d:DataContext="{d:DesignInstance vm:MainViewModel, IsDesignTimeCreatable=False}">
+    <Window.InputBindings>
+        <KeyBinding Key="N" Modifiers="Control" Command="{Binding GenerateDocumentCommand}"/>
+        <KeyBinding Key="O" Modifiers="Control" Command="{Binding SelectTemplatesFolderCommand}"/>
+        <KeyBinding Key="P" Modifiers="Control" Command="{Binding PrintDocumentCommand}"/>
+        <KeyBinding Key="C" Modifiers="Control" Command="{Binding CopyPreviewCommand}"/>
+    </Window.InputBindings>
+    <Window.CommandBindings>
+        <CommandBinding Command="Help" Executed="HelpCommandBinding_Executed"/>
+    </Window.CommandBindings>
 
     <Window.Resources>
         <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
@@ -110,6 +119,66 @@
                         </Border>
                         <TextBlock FontSize="11" FontStyle="Italic" Foreground="{StaticResource TextSecondaryBrush}" TextWrapping="Wrap"
                                    Text="&#1604;&#1571;&#1601;&#1590;&#1604; &#1580;&#1608;&#1583;&#1577; &#1591;&#1576;&#1575;&#1593;&#1577;&#1548; &#1575;&#1601;&#1578;&#1581; &#1575;&#1604;&#1605;&#1587;&#1578;&#1606;&#1583; &#1601;&#1610; Microsoft Word &#1579;&#1605; &#1575;&#1591;&#1576;&#1593;&#1607;."/>
+
+                        <!-- History -->
+                        <Border Background="#FFF8F9FA" CornerRadius="8" Padding="12" Margin="0,12,0,0"
+                                Visibility="{Binding HasHistory, Converter={StaticResource BoolToVis}}">
+                            <Grid>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto"/>
+                                    <RowDefinition Height="*"/>
+                                </Grid.RowDefinitions>
+                                <Grid Grid.Row="0">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0" FontWeight="SemiBold" FontSize="12"
+                                               Text="&#1587;&#1580;&#1604; &#1575;&#1604;&#1605;&#1587;&#1578;&#1606;&#1583;&#1575;&#1578;"/>
+                                    <Button Grid.Column="1" Command="{Binding ClearHistoryCommand}"
+                                            Padding="6,2" MinWidth="0" FontSize="11"
+                                            ToolTip="&#1605;&#1587;&#1581; &#1575;&#1604;&#1587;&#1580;&#1604;">
+                                        <Button.Style><Style TargetType="Button" BasedOn="{StaticResource DangerButton}"/></Button.Style>
+                                        <TextBlock Text="&#128465; &#1605;&#1587;&#1581;"/>
+                                    </Button>
+                                </Grid>
+                                <ListView Grid.Row="1" ItemsSource="{Binding GenerationHistory}"
+                                          BorderThickness="0" Background="Transparent"
+                                          MaxHeight="140" Margin="0,8,0,0"
+                                          ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate DataType="models:HistoryEntry">
+                                            <Border BorderThickness="0,0,0,1" BorderBrush="{StaticResource BorderBrush}"
+                                                    Padding="0,6" Margin="0,0,0,2">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*"/>
+                                                        <ColumnDefinition Width="Auto"/>
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Grid.Column="0">
+                                                        <TextBlock Text="{Binding FileName}" FontSize="12" FontWeight="SemiBold"
+                                                                   Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                        <TextBlock FontSize="10" Foreground="{StaticResource TextSecondaryBrush}">
+                                                            <Run Text="{Binding TemplateName}"/>
+                                                            <Run Text=" &#8226; "/>
+                                                            <Run Text="{Binding GeneratedAt, StringFormat='{}{0:yyyy/MM/dd HH:mm}'}"/>
+                                                        </TextBlock>
+                                                    </StackPanel>
+                                                    <Button Grid.Column="1"
+                                                            Command="{Binding DataContext.OpenHistoryItemCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                            CommandParameter="{Binding}"
+                                                            Padding="6,4" MinWidth="0" FontSize="11"
+                                                            ToolTip="&#1601;&#1578;&#1581;">
+                                                        <Button.Style><Style TargetType="Button" BasedOn="{StaticResource OutlinedButton}"/></Button.Style>
+                                                        <TextBlock Text="&#128194;"/>
+                                                    </Button>
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </Grid>
+                        </Border>
                     </StackPanel>
 
                     <!-- Empty -->
@@ -136,6 +205,8 @@
                         <Grid Grid.Row="0" Margin="0,0,0,12">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
                                 <ColumnDefinition Width="Auto"/>
@@ -191,6 +262,15 @@
                                 </Button.Style>
                                 <TextBlock FontSize="16" Text="&#9998;"/>
                             </Button>
+                            <Button Grid.Column="6"
+                                    Command="{Binding TogglePrintPreviewCommand}"
+                                    Padding="8,4" MinWidth="0" Margin="4,0,0,0"
+                                    ToolTip="&#1605;&#1593;&#1575;&#1610;&#1606;&#1577; &#1575;&#1604;&#1591;&#1576;&#1575;&#1593;&#1577;">
+                                <Button.Style>
+                                    <Style TargetType="Button" BasedOn="{StaticResource OutlinedButton}"/>
+                                </Button.Style>
+                                <TextBlock FontSize="16" Text="&#128065;"/>
+                            </Button>
                         </Grid>
 
                         <TextBox Grid.Row="1" x:Name="DraftTextBox"
@@ -200,7 +280,13 @@
                                  Background="#FFF8F9FA" BorderBrush="{StaticResource BorderBrush}"
                                  FontFamily="Arial" FontSize="14.5" TextAlignment="Right"
                                  FlowDirection="RightToLeft"
-                                 Padding="12" MinHeight="200"/>
+                                 Padding="12" MinHeight="200"
+                                 Visibility="{Binding IsPrintPreview, Converter={StaticResource InvBoolToVis}}"/>
+
+                        <FlowDocumentPageViewer Grid.Row="1" x:Name="PrintPreviewViewer"
+                                                 Visibility="{Binding IsPrintPreview, Converter={StaticResource BoolToVis}}"
+                                                 MinHeight="200"
+                                                 IsVisibleChanged="PrintPreviewViewer_IsVisibleChanged"/>
 
                         <TextBlock Grid.Row="2"
                                    FontSize="10" FontStyle="Italic" Foreground="{StaticResource TextSecondaryBrush}"
@@ -367,13 +453,14 @@
         <!-- XXXX RIGHT PANEL XXXX -->
         <Border Grid.Column="1" Background="{StaticResource CardWhiteBrush}"
                 BorderBrush="{StaticResource BorderBrush}" BorderThickness="1,0,0,0">
-            <Grid Margin="20,24,20,16">
+            <Grid Margin="20,24,20,8">
                 <Grid.RowDefinitions>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="*"/>
+                    <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
@@ -454,8 +541,13 @@
                 </StackPanel>
 
                 <TextBlock Grid.Row="3" FontWeight="SemiBold" FontSize="14"
-                           Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,8"
+                           Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4"
                            Text="&#1575;&#1604;&#1576;&#1610;&#1575;&#1606;&#1575;&#1578; &#1575;&#1604;&#1605;&#1591;&#1604;&#1608;&#1576;&#1577;"/>
+
+                <TextBlock Grid.Row="3" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"
+                           TextWrapping="Wrap" Margin="0,20,0,4"
+                           Text="{Binding CurrentTemplateMeta.Description}"
+                           Visibility="{Binding CurrentTemplateMeta, Converter={StaticResource NullToVis}}"/>
 
                 <ScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Auto" Margin="0,0,0,8">
                     <StackPanel>
@@ -517,6 +609,38 @@
                         Visibility="{Binding ErrorMessage, Converter={StaticResource NullToVis}}">
                     <TextBlock Text="{Binding ErrorMessage}" Foreground="{StaticResource ErrorTextBrush}"
                                FontSize="13" TextWrapping="Wrap"/>
+                </Border>
+
+                <!-- Statistics -->
+                <Border Grid.Row="7" Background="#FFF0F4F8" CornerRadius="6"
+                        Padding="10,8" Margin="0,8,0,0"
+                        BorderBrush="{StaticResource BorderBrush}" BorderThickness="1">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock FontSize="12" Text="&#128196; " Margin="0,0,2,0"/>
+                            <TextBlock FontSize="11" Foreground="{StaticResource TextSecondaryBrush}">
+                                <Run Text="{Binding TotalDocumentsGenerated}"/>
+                                <Run Text=" &#1605;&#1587;&#1578;&#1606;&#1583;"/>
+                            </TextBlock>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock FontSize="12" Text="&#128203; " Margin="0,0,2,0"/>
+                            <TextBlock FontSize="11" Foreground="{StaticResource TextSecondaryBrush}">
+                                <Run Text="{Binding TemplateCount}"/>
+                                <Run Text=" &#1602;&#1575;&#1604;&#1576;"/>
+                            </TextBlock>
+                        </StackPanel>
+                        <StackPanel Grid.Column="2" Orientation="Horizontal" HorizontalAlignment="Center">
+                            <TextBlock FontSize="12" Text="&#9200; " Margin="0,0,2,0"/>
+                            <TextBlock FontSize="11" Foreground="{StaticResource TextSecondaryBrush}"
+                                       Text="{Binding UsageTime}"/>
+                        </StackPanel>
+                    </Grid>
                 </Border>
             </Grid>
         </Border>

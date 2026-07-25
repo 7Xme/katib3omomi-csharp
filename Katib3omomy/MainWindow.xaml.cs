@@ -1,7 +1,9 @@
-﻿using System.IO;
+﻿using System.Diagnostics;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Documents;
+using System.Windows.Input;
 using Katib3omomy.ViewModels;
 using Microsoft.VisualBasic;
 
@@ -17,6 +19,15 @@ public partial class MainWindow : Window
         InitializeComponent();
         DataContext = viewModel;
         Loaded += async (_, _) => await viewModel.InitializeAsync();
+    }
+
+    private void HelpCommandBinding_Executed(object sender, ExecutedRoutedEventArgs e)
+    {
+        Process.Start(new ProcessStartInfo
+        {
+            FileName = "https://github.com/anomalyco/opencode",
+            UseShellExecute = true
+        });
     }
 
     protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
@@ -150,6 +161,25 @@ public partial class MainWindow : Window
         if (!_vm.FormFields.Any(f => f.Key == name))
         {
             _vm.FormFields.Add(new Core.Models.PlaceholderField { Key = name, Value = string.Empty });
+        }
+    }
+
+    private void PrintPreviewViewer_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if ((bool)e.NewValue)
+        {
+            var doc = new FlowDocument();
+            var para = new Paragraph();
+            para.Inlines.Add(new Run(_vm.DraftPreviewText));
+            para.TextAlignment = TextAlignment.Right;
+            doc.FlowDirection = FlowDirection.RightToLeft;
+            doc.FontFamily = new System.Windows.Media.FontFamily("Arial");
+            doc.FontSize = 14;
+            doc.PageWidth = 793.7;
+            doc.PageHeight = 1122.5;
+            doc.PagePadding = new Thickness(96);
+            doc.Blocks.Add(para);
+            PrintPreviewViewer.Document = doc;
         }
     }
 

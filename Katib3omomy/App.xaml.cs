@@ -2,6 +2,7 @@
 using System.Windows;
 using Katib3omomy.Core.Services;
 using Katib3omomy.Infrastructure.Data;
+using Katib3omomy.Infrastructure.Services;
 using Katib3omomy.ViewModels;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -46,6 +47,7 @@ public partial class App : Application
         services.AddSingleton<IDialogService, DialogService>();
         services.AddSingleton<IDocxPlaceholderService, DocxPlaceholderService>();
         services.AddSingleton<ITemplateRepository, TemplateRepository>();
+        services.AddSingleton<IStatsService, StatsService>();
         services.AddSingleton<MainViewModel>();
         services.AddSingleton<MainWindow>();
     }
