@@ -1,5 +1,4 @@
 using System.IO;
-using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
 using DocumentFormat.OpenXml;
@@ -10,377 +9,382 @@ namespace Katib3omomy.Core.Services;
 
 public partial class DocxPlaceholderService : IDocxPlaceholderService
 {
-    private static readonly Regex PlaceholderRegex = PlaceholderPattern();
+    private static readonly Regex PlaceholderRegex = MyPlaceholderRegex();
 
     [GeneratedRegex(@"\*([^*]+)\*")]
-    private static partial Regex PlaceholderPattern();
+    private static partial Regex MyPlaceholderRegex();
 
     public Task<List<string>> ExtractPlaceholdersAsync(string filePath)
     {
-        return Task.Run(() =>
-        {
-            var placeholders = new HashSet<string>();
-
-            using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            using var doc = WordprocessingDocument.Open(stream, false);
-
-            if (doc.MainDocumentPart?.Document.Body is not null)
-                ExtractFromBody(doc.MainDocumentPart.Document.Body, placeholders);
-
-            foreach (var headerPart in doc.MainDocumentPart.HeaderParts)
-                ExtractFromBody(headerPart.Header, placeholders);
-
-            foreach (var footerPart in doc.MainDocumentPart.FooterParts)
-                ExtractFromBody(footerPart.Footer, placeholders);
-
-            return placeholders.OrderBy(p => p).ToList();
-        });
-    }
-
-    private static void ExtractFromBody(OpenXmlElement body, HashSet<string> placeholders)
-    {
-        foreach (var para in body.Descendants<Paragraph>())
-        {
-            var fullText = string.Concat(para.Descendants<Text>().Select(t => t.Text));
-            var matches = PlaceholderRegex.Matches(fullText);
-            foreach (Match match in matches)
-                placeholders.Add(match.Groups[1].Value.Trim());
-        }
+        return Task.Run(() => ExtractPlaceholders(filePath));
     }
 
     public Task<string> ExtractPlainTextAsync(string filePath)
     {
-        return Task.Run(() =>
-        {
-            using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            using var doc = WordprocessingDocument.Open(stream, false);
-
-            var sb = new StringBuilder();
-            if (doc.MainDocumentPart?.Document.Body is not null)
-                ExtractPlainTextFromBody(doc.MainDocumentPart.Document.Body, sb);
-
-            var result = sb.ToString().Trim();
-            return string.IsNullOrEmpty(result) ? "لا يوجد نص قابل للاستخراج في هذا القالب" : result;
-        });
-    }
-
-    private static void ExtractPlainTextFromBody(OpenXmlElement parent, StringBuilder sb)
-    {
-        foreach (var child in parent.ChildElements)
-        {
-            if (child is Paragraph para)
-            {
-                var text = string.Concat(para.Descendants<Text>().Select(t => t.Text)).Trim();
-                if (!string.IsNullOrEmpty(text))
-                    sb.AppendLine(text);
-            }
-            else if (child is Table table)
-            {
-                ExtractTableText(table, sb);
-            }
-        }
-    }
-
-    private static void ExtractTableText(Table table, StringBuilder sb)
-    {
-        sb.AppendLine();
-        foreach (var row in table.Descendants<TableRow>())
-        {
-            var cells = new List<string>();
-            foreach (var cell in row.Descendants<TableCell>())
-            {
-                var cellText = string.Join(" ", cell.Descendants<Paragraph>()
-                    .Select(p => string.Concat(p.Descendants<Text>().Select(t => t.Text))));
-                cells.Add(cellText.Trim());
-            }
-            sb.AppendLine(string.Join(" • ", cells));
-        }
-        sb.AppendLine();
+        return Task.Run(() => ExtractPlainText(filePath));
     }
 
     public Task<string> GenerateDocumentAsync(string templatePath, Dictionary<string, string> values, string outputDir, string baseFileName)
     {
-        return Task.Run(() =>
-        {
-            Directory.CreateDirectory(outputDir);
-
-            byte[] templateBytes = File.ReadAllBytes(templatePath);
-            using var memStream = new MemoryStream();
-            memStream.Write(templateBytes, 0, templateBytes.Length);
-            memStream.Position = 0;
-
-            using var doc = WordprocessingDocument.Open(memStream, true);
-
-            var body = doc.MainDocumentPart!.Document.Body!;
-            ReplacePlaceholdersInBody(body, values);
-
-            foreach (var headerPart in doc.MainDocumentPart.HeaderParts)
-                ReplacePlaceholdersInBody(headerPart.Header, values);
-
-            foreach (var footerPart in doc.MainDocumentPart.FooterParts)
-                ReplacePlaceholdersInBody(footerPart.Footer, values);
-
-            doc.Save();
-
-            var safeName = SanitizeFileName(baseFileName);
-            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmm");
-            var outputFileName = $"{safeName}_{timestamp}.docx";
-            var outputPath = Path.Combine(outputDir, outputFileName);
-
-            File.WriteAllBytes(outputPath, memStream.ToArray());
-
-            return outputPath;
-        });
-    }
-
-    private void ReplacePlaceholdersInBody(OpenXmlElement body, Dictionary<string, string> values)
-    {
-        foreach (var para in body.Descendants<Paragraph>().ToList())
-        {
-            MergeSplitRuns(para);
-
-            foreach (var text in para.Descendants<Text>().ToList())
-            {
-                string original = text.Text;
-                string result = PlaceholderRegex.Replace(original, match =>
-                {
-                    string key = match.Groups[1].Value.Trim();
-                    if (values.TryGetValue(key, out string val))
-                        return $"\u200F\u202B{val}\u202C";
-                    return match.Value;
-                });
-
-                if (result != original)
-                {
-                    text.Text = result;
-                    text.Space = SpaceProcessingModeValues.Preserve;
-
-                    var run = text.Ancestors<Run>().FirstOrDefault();
-                    if (run != null)
-                    {
-                        EnsureRunIsRtl(run);
-                        var p = run.Ancestors<Paragraph>().FirstOrDefault();
-                        if (p != null)
-                            EnsureParagraphIsBidi(p);
-                    }
-                }
-            }
-        }
-    }
-
-    private void MergeSplitRuns(Paragraph paragraph)
-    {
-        bool merged;
-        do
-        {
-            merged = false;
-            var runs = paragraph.Descendants<Run>().ToList();
-            if (runs.Count < 2) break;
-
-            var runTexts = runs.Select(r => r.InnerText).ToList();
-            var offsets = new List<int> { 0 };
-            foreach (var t in runTexts)
-                offsets.Add(offsets.Last() + t.Length);
-            var fullText = string.Concat(runTexts);
-
-            foreach (Match match in PlaceholderRegex.Matches(fullText))
-            {
-                int startPos = match.Index;
-                int endPos = match.Index + match.Length - 1;
-
-                int startRun = FindRunIndex(offsets, startPos);
-                int endRun = FindRunIndex(offsets, endPos);
-
-                if (startRun >= endRun) continue;
-
-                merged = true;
-
-                string fullPlaceholder = match.Value;
-                int placeholderEnd = match.Index + match.Length;
-
-                int hostStart = startRun;
-
-                // Phase 1a: Host run — embed the full placeholder
-                Run hostRun = runs[hostStart];
-                int localStart = startPos - offsets[hostStart];
-                string hostOldText = runTexts[hostStart];
-                int hostOverlapLen = Math.Min(placeholderEnd, offsets[hostStart + 1]) - startPos;
-                string hostPrefix = hostOldText[..localStart];
-                string hostAfterOverlap = hostOldText[(localStart + hostOverlapLen)..];
-                string hostNewText = hostPrefix + fullPlaceholder + hostAfterOverlap;
-                SetRunInnerText(hostRun, hostNewText);
-
-                // Phase 1b: Middle runs — remove their placeholder fragment
-                for (int i = hostStart + 1; i < endRun; i++)
-                {
-                    Run midRun = runs[i];
-                    string midOldText = runTexts[i];
-                    int midFragmentStart = Math.Max(startPos, offsets[i]);
-                    int midFragmentEnd = Math.Min(placeholderEnd, offsets[i + 1]);
-                    int midLocalStart = midFragmentStart - offsets[i];
-                    int midLocalEnd = midFragmentEnd - offsets[i];
-                    string midPrefix = midOldText[..midLocalStart];
-                    string midSuffix = midOldText[midLocalEnd..];
-                    SetRunInnerText(midRun, midPrefix + midSuffix);
-                }
-
-                // Phase 1c: End run — remove its placeholder fragment
-                if (endRun > hostStart)
-                {
-                    Run endRunObj = runs[endRun];
-                    string endOldText = runTexts[endRun];
-                    int endFragmentStart = Math.Max(startPos, offsets[endRun]);
-                    int endLocalStart = endFragmentStart - offsets[endRun];
-                    int endOverlapLen = Math.Min(placeholderEnd, offsets[endRun + 1]) - endFragmentStart;
-                    string endPrefix = endOldText[..endLocalStart];
-                    string endSuffix = endOldText[(endLocalStart + endOverlapLen)..];
-                    SetRunInnerText(endRunObj, endPrefix + endSuffix);
-                }
-
-                break;
-            }
-        } while (merged);
-    }
-
-    private static int FindRunIndex(List<int> offsets, int position)
-    {
-        for (int i = 0; i < offsets.Count - 1; i++)
-            if (position >= offsets[i] && position < offsets[i + 1])
-                return i;
-        return offsets.Count - 2;
-    }
-
-    private static void SetRunInnerText(Run run, string text)
-    {
-        var textElements = run.Descendants<Text>().ToList();
-        if (textElements.Count == 0)
-        {
-            var newText = new Text(text);
-            newText.Space = SpaceProcessingModeValues.Preserve;
-            run.Append(newText);
-        }
-        else
-        {
-            textElements[0].Text = text;
-            textElements[0].Space = SpaceProcessingModeValues.Preserve;
-            for (int i = 1; i < textElements.Count; i++)
-                textElements[i].Text = string.Empty;
-        }
-    }
-
-    private static void EnsureParagraphIsBidi(Paragraph p)
-    {
-        if (p.ParagraphProperties == null)
-            p.ParagraphProperties = new ParagraphProperties();
-        if (p.ParagraphProperties.BiDi == null)
-            p.ParagraphProperties.BiDi = new BiDi();
-    }
-
-    private static void EnsureRunIsRtl(Run r)
-    {
-        if (r.RunProperties == null)
-            r.RunProperties = new RunProperties();
-        if (r.RunProperties.RightToLeftText == null)
-            r.RunProperties.RightToLeftText = new RightToLeftText
-            {
-                Val = OnOffValue.FromBoolean(true)
-            };
+        return Task.Run(() => GenerateDocument(templatePath, values, outputDir, baseFileName));
     }
 
     public Task<string> GenerateDocumentFromPlainTextAsync(string content, Dictionary<string, string> values, string outputDir, string baseFileName)
     {
-        return Task.Run(() =>
-        {
-            Directory.CreateDirectory(outputDir);
-
-            string processed = content;
-            foreach (var kvp in values)
-            {
-                if (!string.IsNullOrEmpty(kvp.Key))
-                    processed = processed.Replace($"*{kvp.Key}*", $"\u200F\u202B{kvp.Value}\u202C");
-            }
-
-            using var memStream = new MemoryStream();
-            using var doc = WordprocessingDocument.Create(memStream, WordprocessingDocumentType.Document);
-
-            var mainPart = doc.AddMainDocumentPart();
-            mainPart.Document = new Document();
-            var body = new Body();
-            mainPart.Document.Append(body);
-
-            var lines = processed.Split('\n');
-            foreach (var line in lines)
-            {
-                var trimmed = line.Trim();
-                if (string.IsNullOrEmpty(trimmed)) continue;
-
-                var para = new Paragraph();
-                var paraProps = new ParagraphProperties();
-                paraProps.Append(new BiDi());
-                para.Append(paraProps);
-
-                var run = new Run();
-                var runProps = new RunProperties();
-                runProps.Append(new RunFonts
-                {
-                    Ascii = "Arial",
-                    HighAnsi = "Arial",
-                    ComplexScript = "Arial"
-                });
-                runProps.Append(new FontSize { Val = "28" });
-                runProps.Append(new FontSizeComplexScript { Val = "28" });
-                runProps.Append(new RightToLeftText
-                {
-                    Val = OnOffValue.FromBoolean(true)
-                });
-                run.Append(runProps);
-
-                var text = new Text(trimmed) { Space = SpaceProcessingModeValues.Preserve };
-                run.Append(text);
-                para.Append(run);
-                body.Append(para);
-            }
-
-            var sectionProps = new SectionProperties();
-            sectionProps.Append(new PageSize
-            {
-                Width = 11906,
-                Height = 16838
-            });
-            sectionProps.Append(new PageMargin
-            {
-                Top = 1134,
-                Bottom = 1134,
-                Left = 1134,
-                Right = 1134
-            });
-            body.Append(sectionProps);
-
-            doc.Save();
-
-            var safeName = SanitizeFileName(baseFileName);
-            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmm");
-            var outputFileName = $"{safeName}_{timestamp}.docx";
-            var outputPath = Path.Combine(outputDir, outputFileName);
-
-            File.WriteAllBytes(outputPath, memStream.ToArray());
-
-            return outputPath;
-        });
+        return Task.Run(() => GenerateFromPlainText(content, values, outputDir, baseFileName));
     }
 
     public bool IsValidDocx(string filePath)
     {
         try
         {
-            using var stream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            using var doc = WordprocessingDocument.Open(stream, false);
-            return doc.MainDocumentPart?.Document?.Body != null;
+            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using var doc = WordprocessingDocument.Open(fs, false);
+            return doc.MainDocumentPart?.Document?.Body is not null;
         }
         catch
         {
             return false;
         }
+    }
+
+    private List<string> ExtractPlaceholders(string filePath)
+    {
+        var placeholders = new HashSet<string>();
+
+        using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using var doc = WordprocessingDocument.Open(fs, false);
+
+        var body = doc.MainDocumentPart?.Document?.Body;
+        if (body is not null)
+            CollectPlaceholders(body, placeholders);
+
+        foreach (var headerPart in doc.MainDocumentPart!.HeaderParts)
+        {
+            if (headerPart.RootElement is not null)
+                CollectPlaceholders(headerPart.RootElement, placeholders);
+        }
+
+        foreach (var footerPart in doc.MainDocumentPart.FooterParts)
+        {
+            if (footerPart.RootElement is not null)
+                CollectPlaceholders(footerPart.RootElement, placeholders);
+        }
+
+        return placeholders.OrderBy(p => p).ToList();
+    }
+
+    private static void CollectPlaceholders(OpenXmlElement parent, HashSet<string> placeholders)
+    {
+        foreach (var p in parent.Descendants<Paragraph>())
+        {
+            var text = string.Concat(p.Descendants<Text>().Select(t => t.Text));
+            foreach (Match match in PlaceholderRegex.Matches(text))
+                placeholders.Add(match.Groups[1].Value.Trim());
+        }
+    }
+
+    private string ExtractPlainText(string filePath)
+    {
+        using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using var doc = WordprocessingDocument.Open(fs, false);
+
+        var body = doc.MainDocumentPart?.Document?.Body;
+        if (body is null)
+            return "\u0644\u0627 \u064A\u0648\u062C\u062F \u0646\u0635 \u0642\u0627\u0628\u0644 \u0644\u0644\u0627\u0633\u062A\u062E\u0631\u0627\u062C \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0642\u0627\u0644\u0628";
+
+        var sb = new StringBuilder();
+
+        foreach (var element in body.Elements())
+        {
+            if (element is Paragraph p)
+            {
+                var text = string.Concat(p.Descendants<Text>().Select(t => t.Text)).Trim();
+                if (!string.IsNullOrEmpty(text))
+                    sb.AppendLine(text);
+            }
+            else if (element is Table table)
+            {
+                ExtractTableText(table, sb);
+                sb.AppendLine();
+            }
+        }
+
+        var result = sb.ToString().Trim();
+        return string.IsNullOrEmpty(result)
+            ? "\u0644\u0627 \u064A\u0648\u062C\u062F \u0646\u0635 \u0642\u0627\u0628\u0644 \u0644\u0644\u0627\u0633\u062A\u062E\u0631\u0627\u062C \u0641\u064A \u0647\u0630\u0627 \u0627\u0644\u0642\u0627\u0644\u0628"
+            : result;
+    }
+
+    private static void ExtractTableText(Table table, StringBuilder sb)
+    {
+        foreach (var row in table.Elements<TableRow>())
+        {
+            var cells = new List<string>();
+            foreach (var cell in row.Elements<TableCell>())
+            {
+                var cellText = string.Join(" ", cell.Descendants<Paragraph>()
+                    .Select(pp => string.Concat(pp.Descendants<Text>().Select(t => t.Text))));
+                cells.Add(cellText.Trim());
+            }
+            sb.AppendLine(string.Join(" \u2022 ", cells.Where(c => !string.IsNullOrEmpty(c))));
+        }
+    }
+
+    private string GenerateDocument(string templatePath, Dictionary<string, string> values, string outputDir, string baseFileName)
+    {
+        var ms = new MemoryStream();
+        using (var fs = new FileStream(templatePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            fs.CopyTo(ms);
+        }
+        ms.Position = 0;
+
+        using (var doc = WordprocessingDocument.Open(ms, true))
+        {
+            var body = doc.MainDocumentPart?.Document?.Body;
+            if (body is not null)
+                ReplacePlaceholdersInContainer(body, values);
+
+            foreach (var headerPart in doc.MainDocumentPart!.HeaderParts)
+            {
+                if (headerPart.RootElement is not null)
+                    ReplacePlaceholdersInContainer(headerPart.RootElement, values);
+            }
+
+            foreach (var footerPart in doc.MainDocumentPart.FooterParts)
+            {
+                if (footerPart.RootElement is not null)
+                    ReplacePlaceholdersInContainer(footerPart.RootElement, values);
+            }
+
+            doc.Save();
+        }
+
+        var sanitizedName = SanitizeFileName(baseFileName);
+        var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmm");
+        var outputFileName = $"{sanitizedName}_{timestamp}.docx";
+        var outputPath = Path.Combine(outputDir, outputFileName);
+
+        Directory.CreateDirectory(outputDir);
+        File.WriteAllBytes(outputPath, ms.ToArray());
+
+        return outputPath;
+    }
+
+    private void ReplacePlaceholdersInContainer(OpenXmlElement container, Dictionary<string, string> values)
+    {
+        foreach (var p in container.Descendants<Paragraph>().ToList())
+        {
+            MergeSplitRuns(p, values);
+            ReplacePlaceholdersInParagraph(p, values);
+        }
+    }
+
+    private void MergeSplitRuns(Paragraph p, Dictionary<string, string> values)
+    {
+        var runs = p.Elements<Run>().ToList();
+        if (runs.Count < 2) return;
+
+        bool changed;
+        do
+        {
+            changed = false;
+            var runTexts = runs.Select(r => r.InnerText).ToList();
+            var fullText = string.Concat(runTexts);
+
+            foreach (Match match in PlaceholderRegex.Matches(fullText))
+            {
+                int start = match.Index;
+                int end = start + match.Length;
+
+                int startRun = -1, endRun = -1;
+                int offset = 0;
+                for (int i = 0; i < runTexts.Count; i++)
+                {
+                    if (startRun == -1 && offset + runTexts[i].Length > start)
+                        startRun = i;
+                    offset += runTexts[i].Length;
+                    if (startRun != -1 && offset >= end)
+                    {
+                        endRun = i;
+                        break;
+                    }
+                }
+
+                if (endRun > startRun)
+                {
+                    MergePlaceholderAcrossRuns(runs, startRun, endRun, start, end, match.Value, runTexts);
+                    changed = true;
+                    break;
+                }
+            }
+        }
+        while (changed);
+    }
+
+    private static void MergePlaceholderAcrossRuns(List<Run> runs, int startRunIdx, int endRunIdx, int startPos, int endPos, string placeholderText, List<string> runTexts)
+    {
+        int offset = 0;
+        var runOffsets = new List<(int start, int end)>();
+        foreach (var rt in runTexts)
+        {
+            runOffsets.Add((offset, offset + rt.Length));
+            offset += rt.Length;
+        }
+
+        for (int i = startRunIdx; i <= endRunIdx; i++)
+        {
+            var (rStart, rEnd) = runOffsets[i];
+            var run = runs[i];
+            var textNodes = run.Elements<Text>().ToList();
+            if (textNodes.Count == 0) continue;
+
+            int segStart = Math.Max(rStart, startPos) - rStart;
+            int segEnd = Math.Min(rEnd, endPos) - rStart;
+
+            if (i == startRunIdx)
+            {
+                string before = runTexts[i][..segStart];
+                string after = runTexts[i][segEnd..];
+                textNodes[0].Text = before + placeholderText + after;
+                textNodes[0].Space = SpaceProcessingModeValues.Preserve;
+                for (int t = 1; t < textNodes.Count; t++)
+                    textNodes[t].Text = "";
+            }
+            else
+            {
+                string before = runTexts[i][..segStart];
+                string after = runTexts[i][segEnd..];
+                textNodes[0].Text = before + after;
+                textNodes[0].Space = SpaceProcessingModeValues.Preserve;
+                for (int t = 1; t < textNodes.Count; t++)
+                    textNodes[t].Text = "";
+            }
+        }
+    }
+
+    private void ReplacePlaceholdersInParagraph(Paragraph p, Dictionary<string, string> values)
+    {
+        bool hasReplacement = false;
+
+        foreach (var text in p.Descendants<Text>().ToList())
+        {
+            foreach (var kvp in values)
+            {
+                var placeholder = $"*{kvp.Key}*";
+                if (text.Text.Contains(placeholder))
+                {
+                    text.Text = text.Text.Replace(placeholder, $"\u200F\u202B{kvp.Value}\u202C");
+                    text.Space = SpaceProcessingModeValues.Preserve;
+                    hasReplacement = true;
+                }
+            }
+        }
+
+        if (!hasReplacement) return;
+
+        EnsureParagraphIsBidi(p);
+        foreach (var run in p.Elements<Run>())
+        {
+            foreach (var text in run.Elements<Text>())
+            {
+                if (text.Text.Contains('\u200F'))
+                {
+                    EnsureRunIsRtl(run);
+                    break;
+                }
+            }
+        }
+    }
+
+    private static void EnsureParagraphIsBidi(Paragraph p)
+    {
+        var pPr = p.GetFirstChild<ParagraphProperties>();
+        if (pPr is null)
+        {
+            pPr = new ParagraphProperties();
+            p.InsertAt(pPr, 0);
+        }
+        if (pPr.GetFirstChild<BiDi>() is null)
+            pPr.Append(new BiDi());
+    }
+
+    private static void EnsureRunIsRtl(Run r)
+    {
+        var rPr = r.GetFirstChild<RunProperties>();
+        if (rPr is null)
+        {
+            rPr = new RunProperties();
+            r.InsertAt(rPr, 0);
+        }
+        if (rPr.GetFirstChild<RightToLeftText>() is null)
+            rPr.Append(new RightToLeftText());
+    }
+
+    private string GenerateFromPlainText(string content, Dictionary<string, string> values, string outputDir, string baseFileName)
+    {
+        string result = content;
+        foreach (var kvp in values)
+            result = result.Replace($"*{kvp.Key}*", $"\u200F\u202B{kvp.Value}\u202C");
+
+        var ms = new MemoryStream();
+        using (var doc = WordprocessingDocument.Create(ms, WordprocessingDocumentType.Document, true))
+        {
+            var mainPart = doc.AddMainDocumentPart();
+            mainPart.Document = new Document();
+            var body = new Body();
+
+            var lines = result.Split('\n');
+            foreach (var line in lines)
+            {
+                var trimmed = line.Trim();
+                if (string.IsNullOrEmpty(trimmed)) continue;
+
+                var paragraph = new Paragraph();
+                var pPr = new ParagraphProperties();
+                pPr.Append(new BiDi());
+                paragraph.Append(pPr);
+
+                var run = new Run();
+                var rPr = new RunProperties();
+                rPr.Append(new RunFonts { Ascii = "Arial", HighAnsi = "Arial", ComplexScript = "Arial" });
+                rPr.Append(new FontSize { Val = "28" });
+                rPr.Append(new FontSizeComplexScript { Val = "28" });
+                rPr.Append(new RightToLeftText());
+                run.Append(rPr);
+                run.Append(new Text(trimmed) { Space = SpaceProcessingModeValues.Preserve });
+                paragraph.Append(run);
+                body.Append(paragraph);
+            }
+
+            var sectPr = new SectionProperties();
+            sectPr.Append(new PageSize { Width = 11906, Height = 16838 });
+            sectPr.Append(new PageMargin
+            {
+                Top = 1134,
+                Right = (UInt32Value)1134U,
+                Bottom = 1134,
+                Left = (UInt32Value)1134U,
+                Header = 0U,
+                Footer = 0U
+            });
+            body.Append(sectPr);
+
+            mainPart.Document.Append(body);
+            mainPart.Document.Save();
+        }
+
+        ms.Position = 0;
+        var sanitizedName = SanitizeFileName(baseFileName);
+        var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmm");
+        var outputFileName = $"{sanitizedName}_{timestamp}.docx";
+        var outputPath = Path.Combine(outputDir, outputFileName);
+
+        Directory.CreateDirectory(outputDir);
+        File.WriteAllBytes(outputPath, ms.ToArray());
+
+        return outputPath;
     }
 
     private static string SanitizeFileName(string name)

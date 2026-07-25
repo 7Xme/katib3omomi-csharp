@@ -87,6 +87,44 @@ public partial class MainViewModel : ObservableObject
         OnPropertyChanged(nameof(CanShowPreview));
         OnPropertyChanged(nameof(CanShowEmpty));
         OnPropertyChanged(nameof(HasSelectedTemplate));
+
+        if (value is not null)
+            _ = LoadTemplateDataAsync(value);
+    }
+
+    private async Task LoadTemplateDataAsync(TemplateFile template)
+    {
+        if (template != SelectedTemplate) return;
+
+        FormFields.Clear();
+        ErrorMessage = null;
+        LastGenerated = null;
+        DraftPreviewText = string.Empty;
+        OriginalTemplateText = string.Empty;
+        IsParsingTemplate = true;
+
+        try
+        {
+            var placeholders = await _docxService.ExtractPlaceholdersAsync(template.FullPath);
+            if (template != SelectedTemplate) return;
+
+            foreach (var p in placeholders)
+                FormFields.Add(new PlaceholderField { Key = p, Value = string.Empty });
+
+            var plainText = await _docxService.ExtractPlainTextAsync(template.FullPath);
+            if (template != SelectedTemplate) return;
+
+            OriginalTemplateText = plainText;
+            DraftPreviewText = plainText;
+        }
+        catch (Exception ex)
+        {
+            ErrorMessage = $"حدث خطأ أثناء تحليل القالب: {ex.Message}";
+        }
+        finally
+        {
+            IsParsingTemplate = false;
+        }
     }
 
     partial void OnLastGeneratedChanged(GeneratedDocument? value)
@@ -167,41 +205,6 @@ public partial class MainViewModel : ObservableObject
         finally
         {
             IsLoadingTemplates = false;
-        }
-    }
-
-    [RelayCommand]
-    private async Task SelectTemplate(TemplateFile? template)
-    {
-        if (template is null || template == SelectedTemplate) return;
-
-        SelectedTemplate = template;
-        FormFields.Clear();
-        ErrorMessage = null;
-        LastGenerated = null;
-        DraftPreviewText = string.Empty;
-        OriginalTemplateText = string.Empty;
-        IsParsingTemplate = true;
-
-        try
-        {
-            var placeholders = await _docxService.ExtractPlaceholdersAsync(template.FullPath);
-            foreach (var p in placeholders)
-            {
-                FormFields.Add(new PlaceholderField { Key = p, Value = string.Empty });
-            }
-
-            var plainText = await _docxService.ExtractPlainTextAsync(template.FullPath);
-            OriginalTemplateText = plainText;
-            DraftPreviewText = plainText;
-        }
-        catch (Exception ex)
-        {
-            ErrorMessage = $"حدث خطأ أثناء تحليل القالب: {ex.Message}";
-        }
-        finally
-        {
-            IsParsingTemplate = false;
         }
     }
 
