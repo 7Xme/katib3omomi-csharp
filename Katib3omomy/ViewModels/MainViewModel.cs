@@ -1,4 +1,7 @@
 using System.Collections.ObjectModel;
+using System.IO;
+using System.Text.Json;
+using System.Windows.Threading;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Katib3omomy.Core.Models;
@@ -13,6 +16,8 @@ public partial class MainViewModel : ObservableObject
     private readonly ISettingsService _settingsService;
     private readonly IDocxPlaceholderService _docxService;
     private readonly IDialogService _dialogService;
+    private readonly string _backupFilePath;
+    private readonly DispatcherTimer _autoSaveTimer;
 
     public MainViewModel(
         ISettingsService settingsService,
@@ -25,6 +30,14 @@ public partial class MainViewModel : ObservableObject
         _docxService = docxService;
         _dialogService = dialogService;
 
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+        var folder = Path.Combine(appData, "Katib3omomy");
+        Directory.CreateDirectory(folder);
+        _backupFilePath = Path.Combine(folder, "draft_backup.json");
+
+        _autoSaveTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(30) };
+        _autoSaveTimer.Tick += async (_, _) => await SaveBackupAsync();
+
         FormFields.CollectionChanged += (_, e) =>
         {
             OnPropertyChanged(nameof(HasFormFields));
@@ -36,6 +49,67 @@ public partial class MainViewModel : ObservableObject
                 foreach (PlaceholderField field in e.OldItems)
                     field.PropertyChanged -= OnFieldPropertyChanged;
         };
+    }
+
+    private async Task SaveBackupAsync()
+    {
+        if (SelectedTemplate is null || !IsDraftModified) return;
+        try
+        {
+            var data = new BackupData
+            {
+                TemplatePath = SelectedTemplate.FullPath,
+                OriginalText = OriginalTemplateText,
+                DraftText = DraftPreviewText
+            };
+            var json = JsonSerializer.Serialize(data);
+            await File.WriteAllTextAsync(_backupFilePath, json);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ERROR] SaveBackup: {ex.Message}");
+        }
+    }
+
+    private async Task<BackupData?> LoadBackupAsync()
+    {
+        try
+        {
+            if (!File.Exists(_backupFilePath)) return null;
+            var json = await File.ReadAllTextAsync(_backupFilePath);
+            return JsonSerializer.Deserialize<BackupData>(json);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private void ClearBackup()
+    {
+        try
+        {
+            if (File.Exists(_backupFilePath))
+                File.Delete(_backupFilePath);
+        }
+        catch { }
+    }
+
+    private class BackupData
+    {
+        public string? TemplatePath { get; set; }
+        public string? OriginalText { get; set; }
+        public string? DraftText { get; set; }
+    }
+
+    public ObservableCollection<string> RecentFolders { get; } = new();
+
+    public void RefreshRecentFolders()
+    {
+        RecentFolders.Clear();
+        foreach (var f in _settingsService.RecentFolders)
+            RecentFolders.Add(f);
+        OnPropertyChanged(nameof(HasRecentFolders));
     }
 
     private void OnFieldPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
@@ -80,6 +154,26 @@ public partial class MainViewModel : ObservableObject
     [ObservableProperty]
     private string _statusText = string.Empty;
 
+    [ObservableProperty]
+    private string _progressDescription = string.Empty;
+
+    [ObservableProperty]
+    private bool _isEditingTemplate;
+
+    partial void OnIsEditingTemplateChanged(bool value)
+    {
+        OnPropertyChanged(nameof(CanShowPreview));
+    }
+
+    [ObservableProperty]
+    private string _currentFolderPath = string.Empty;
+
+    [ObservableProperty]
+    private ObservableCollection<FileSystemEntry> _fileBrowserItems = new();
+
+    public bool HasRecentFolders => RecentFolders.Count > 0;
+    public bool CanGoUp => !string.IsNullOrEmpty(CurrentFolderPath) && Directory.GetParent(CurrentFolderPath) is not null;
+
     public IEnumerable<TemplateFile> FilteredTemplates =>
         string.IsNullOrWhiteSpace(SearchQuery)
             ? AllTemplates
@@ -87,7 +181,7 @@ public partial class MainViewModel : ObservableObject
                 System.Globalization.CultureInfo.CurrentCulture.CompareInfo.IndexOf(
                     t.Name, SearchQuery, System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.IgnoreNonSpace) >= 0);
 
-    public bool CanShowPreview => SelectedTemplate is not null && LastGenerated is null && !IsParsingTemplate;
+    public bool CanShowPreview => SelectedTemplate is not null && LastGenerated is null && !IsParsingTemplate && !IsEditingTemplate;
     public bool CanShowEmpty => SelectedTemplate is null && !IsParsingTemplate;
     public bool HasFormFields => FormFields.Count > 0;
     public bool CanGenerate => HasFormFields && FormFields.All(f => !f.HasError);
@@ -115,12 +209,15 @@ public partial class MainViewModel : ObservableObject
     {
         if (template != SelectedTemplate) return;
 
+        ClearBackup();
+        _autoSaveTimer.Stop();
         FormFields.Clear();
         ErrorMessage = null;
         LastGenerated = null;
         DraftPreviewText = string.Empty;
         OriginalTemplateText = string.Empty;
         IsParsingTemplate = true;
+        ProgressDescription = "جاري تحليل القالب...";
 
         try
         {
@@ -130,11 +227,15 @@ public partial class MainViewModel : ObservableObject
             foreach (var p in placeholders)
                 FormFields.Add(new PlaceholderField { Key = p, Value = string.Empty });
 
+            ProgressDescription = "جاري استخراج النص...";
+
             var plainText = await _docxService.ExtractPlainTextAsync(template.FullPath);
             if (template != SelectedTemplate) return;
 
             OriginalTemplateText = plainText;
             DraftPreviewText = plainText;
+            ProgressDescription = string.Empty;
+            _autoSaveTimer.Start();
         }
         catch (Exception ex)
         {
@@ -174,10 +275,165 @@ public partial class MainViewModel : ObservableObject
     public async Task InitializeAsync()
     {
         await _settingsService.LoadAsync();
+        RefreshRecentFolders();
         if (!string.IsNullOrEmpty(_settingsService.TemplatesFolderPath))
         {
-            await LoadTemplatesAsync();
+            var path = _settingsService.TemplatesFolderPath;
+            if (Directory.Exists(path))
+                await NavigateToFolderAsync(path);
+            else
+                await ShowDriveListAsync();
+            await TryRestoreBackupAsync();
         }
+        else
+        {
+            await ShowDriveListAsync();
+        }
+    }
+
+    private async Task ShowDriveListAsync()
+    {
+        CurrentFolderPath = string.Empty;
+        OnPropertyChanged(nameof(CanGoUp));
+        FileBrowserItems = new ObservableCollection<FileSystemEntry>(
+            DriveInfo.GetDrives()
+                .Where(d => d.IsReady)
+                .Select(d => new FileSystemEntry
+                {
+                    Name = d.Name.TrimEnd('\\'),
+                    FullPath = d.RootDirectory.FullName,
+                    IsFolder = true,
+                    IsDrive = true
+                }));
+        AllTemplates.Clear();
+        StatusText = string.Empty;
+    }
+
+    private async Task TryRestoreBackupAsync()
+    {
+        var backup = await LoadBackupAsync();
+        if (backup is null || string.IsNullOrEmpty(backup.TemplatePath)) return;
+
+        var template = AllTemplates.FirstOrDefault(t =>
+            string.Equals(t.FullPath, backup.TemplatePath, StringComparison.OrdinalIgnoreCase));
+        if (template is null) return;
+
+        if (string.IsNullOrEmpty(backup.DraftText) || backup.DraftText == backup.OriginalText)
+        {
+            ClearBackup();
+            return;
+        }
+
+        var restore = _dialogService.ShowConfirm(
+            "استعادة النص المحفوظ",
+            $"يوجد نص معدل غير محفوظ من الجلسة السابقة للقالب:\n{template.Name}\n\nهل تريد استعادته؟");
+        if (restore)
+        {
+            SelectedTemplate = template;
+            OriginalTemplateText = backup.OriginalText ?? string.Empty;
+            DraftPreviewText = backup.DraftText ?? string.Empty;
+        }
+        else
+        {
+            ClearBackup();
+        }
+    }
+
+    [RelayCommand]
+    private async Task SelectRecentFolder(string folderPath)
+    {
+        await NavigateToFolderAsync(folderPath);
+    }
+
+    [RelayCommand]
+    private async Task NavigateToFolder(string path)
+    {
+        await NavigateToFolderAsync(path);
+    }
+
+    [RelayCommand]
+    private async Task GoUp()
+    {
+        if (string.IsNullOrEmpty(CurrentFolderPath)) return;
+        var parent = Directory.GetParent(CurrentFolderPath);
+        if (parent is not null)
+            await NavigateToFolderAsync(parent.FullName);
+    }
+
+    private async Task NavigateToFolderAsync(string path)
+    {
+        if (string.IsNullOrEmpty(path) || !Directory.Exists(path)) return;
+
+        CurrentFolderPath = path;
+        OnPropertyChanged(nameof(CanGoUp));
+        _settingsService.AddRecentFolder(path);
+        await _settingsService.SaveAsync();
+        RefreshRecentFolders();
+        await LoadTemplatesFromFolderAsync(path);
+    }
+
+    private async Task LoadTemplatesFromFolderAsync(string path)
+    {
+        IsLoadingTemplates = true;
+        ErrorMessage = null;
+
+        try
+        {
+            var items = new ObservableCollection<FileSystemEntry>();
+
+            foreach (var dir in Directory.GetDirectories(path))
+            {
+                var info = new DirectoryInfo(dir);
+                items.Add(new FileSystemEntry
+                {
+                    Name = info.Name,
+                    FullPath = dir,
+                    IsFolder = true
+                });
+            }
+
+            foreach (var file in Directory.GetFiles(path, "*.docx"))
+            {
+                var info = new FileInfo(file);
+                items.Add(new FileSystemEntry
+                {
+                    Name = Path.GetFileNameWithoutExtension(file),
+                    FullPath = file,
+                    IsFolder = false
+                });
+            }
+
+            FileBrowserItems = items;
+
+            var templates = items
+                .Where(i => !i.IsFolder)
+                .Select(i => new TemplateFile
+                {
+                    Name = i.Name,
+                    FileName = Path.GetFileName(i.FullPath),
+                    FullPath = i.FullPath
+                }).ToList();
+
+            AllTemplates = new ObservableCollection<TemplateFile>(templates);
+            StatusText = $"عدد القوالب: {templates.Count}";
+
+            if (templates.Count == 0)
+                ErrorMessage = "لا توجد ملفات .docx في هذا المجلد";
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[ERROR] LoadTemplatesFromFolder: {ex}");
+            ErrorMessage = "حدث خطأ أثناء تصفح المجلد.";
+        }
+        finally
+        {
+            IsLoadingTemplates = false;
+        }
+    }
+
+    public async Task SetTemplatesFolderAsync(string path)
+    {
+        await NavigateToFolderAsync(path);
     }
 
     [RelayCommand]
@@ -191,53 +447,16 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private async Task LoadTemplates()
     {
-        await LoadTemplatesAsync();
-    }
-
-    public async Task SetTemplatesFolderAsync(string path)
-    {
-        _settingsService.TemplatesFolderPath = path;
-        await _settingsService.SaveAsync();
-        await LoadTemplatesAsync();
+        if (!string.IsNullOrEmpty(CurrentFolderPath) && Directory.Exists(CurrentFolderPath))
+            await NavigateToFolderAsync(CurrentFolderPath);
+        else
+            await ShowDriveListAsync();
     }
 
     public void SelectTemplateByPath(string filePath)
     {
         SelectedTemplate = AllTemplates.FirstOrDefault(t =>
             string.Equals(t.FullPath, filePath, StringComparison.OrdinalIgnoreCase));
-    }
-
-    private async Task LoadTemplatesAsync()
-    {
-        IsLoadingTemplates = true;
-        ErrorMessage = null;
-
-        try
-        {
-            var path = _settingsService.TemplatesFolderPath;
-            if (string.IsNullOrEmpty(path) || !System.IO.Directory.Exists(path))
-            {
-                AllTemplates.Clear();
-                StatusText = "عدد القوالب: 0";
-                return;
-            }
-
-            var templates = await _templateRepository.LoadTemplatesAsync(path);
-            AllTemplates = new ObservableCollection<TemplateFile>(templates);
-            StatusText = $"عدد القوالب: {templates.Count}";
-
-            if (templates.Count == 0)
-                ErrorMessage = "لا توجد ملفات .docx في المجلد المحدد";
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[ERROR] LoadTemplatesAsync: {ex}");
-            ErrorMessage = "حدث خطأ أثناء تحميل القوالب. تأكد من تحديد مجلد صحيح.";
-        }
-        finally
-        {
-            IsLoadingTemplates = false;
-        }
     }
 
     [RelayCommand]
@@ -254,6 +473,7 @@ public partial class MainViewModel : ObservableObject
 
         IsGenerating = true;
         ErrorMessage = null;
+        ProgressDescription = "جاري إنشاء المستند...";
 
         try
         {
@@ -296,6 +516,7 @@ public partial class MainViewModel : ObservableObject
             };
 
             _dialogService.ShowSuccess("تم بنجاح", $"تم إنشاء المستند بنجاح:\n{LastGenerated.FileName}");
+            ClearBackup();
         }
         catch (Exception ex)
         {
@@ -305,6 +526,7 @@ public partial class MainViewModel : ObservableObject
         finally
         {
             IsGenerating = false;
+            ProgressDescription = string.Empty;
         }
     }
 
@@ -319,6 +541,8 @@ public partial class MainViewModel : ObservableObject
     [RelayCommand]
     private void ResetSelection()
     {
+        _autoSaveTimer.Stop();
+        ClearBackup();
         SelectedTemplate = null;
         FormFields.Clear();
         LastGenerated = null;
@@ -332,6 +556,12 @@ public partial class MainViewModel : ObservableObject
     private void ResetDraft()
     {
         DraftPreviewText = OriginalTemplateText;
+    }
+
+    [RelayCommand]
+    private void ToggleEditor()
+    {
+        IsEditingTemplate = !IsEditingTemplate;
     }
 
     [RelayCommand]

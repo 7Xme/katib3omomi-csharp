@@ -15,6 +15,16 @@ public class JsonSettingsService : ISettingsService
         set => _data.TemplatesFolderPath = value;
     }
 
+    public List<string> RecentFolders => _data.RecentFolders;
+
+    public void AddRecentFolder(string folderPath)
+    {
+        _data.RecentFolders.RemoveAll(f => string.Equals(f, folderPath, StringComparison.OrdinalIgnoreCase));
+        _data.RecentFolders.Insert(0, folderPath);
+        if (_data.RecentFolders.Count > 5)
+            _data.RecentFolders.RemoveRange(5, _data.RecentFolders.Count - 5);
+    }
+
     public JsonSettingsService()
     {
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
@@ -56,5 +66,6 @@ public class JsonSettingsService : ISettingsService
     private class JsonSettingsData
     {
         public string? TemplatesFolderPath { get; set; }
+        public List<string> RecentFolders { get; set; } = new();
     }
 }
