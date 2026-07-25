@@ -25,7 +25,23 @@ public partial class MainViewModel : ObservableObject
         _docxService = docxService;
         _dialogService = dialogService;
 
-        FormFields.CollectionChanged += (_, _) => OnPropertyChanged(nameof(HasFormFields));
+        FormFields.CollectionChanged += (_, e) =>
+        {
+            OnPropertyChanged(nameof(HasFormFields));
+            OnPropertyChanged(nameof(CanGenerate));
+            if (e.NewItems is not null)
+                foreach (PlaceholderField field in e.NewItems)
+                    field.PropertyChanged += OnFieldPropertyChanged;
+            if (e.OldItems is not null)
+                foreach (PlaceholderField field in e.OldItems)
+                    field.PropertyChanged -= OnFieldPropertyChanged;
+        };
+    }
+
+    private void OnFieldPropertyChanged(object? sender, System.ComponentModel.PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName == nameof(PlaceholderField.HasError))
+            OnPropertyChanged(nameof(CanGenerate));
     }
 
     [ObservableProperty]
@@ -72,6 +88,7 @@ public partial class MainViewModel : ObservableObject
     public bool CanShowPreview => SelectedTemplate is not null && LastGenerated is null && !IsParsingTemplate;
     public bool CanShowEmpty => SelectedTemplate is null && !IsParsingTemplate;
     public bool HasFormFields => FormFields.Count > 0;
+    public bool CanGenerate => HasFormFields && FormFields.All(f => !f.HasError);
     public bool IsDraftModified => DraftPreviewText != OriginalTemplateText;
     public bool HasSelectedTemplate => SelectedTemplate is not null;
     public bool HasLastGenerated => LastGenerated is not null;
@@ -119,11 +136,13 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"حدث خطأ أثناء تحليل القالب: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"[ERROR] LoadTemplateDataAsync: {ex}");
+            ErrorMessage = "حدث خطأ أثناء تحليل القالب. تأكد من أن الملف بصيغة .docx صالحة.";
         }
         finally
         {
             IsParsingTemplate = false;
+            OnPropertyChanged(nameof(CanGenerate));
         }
     }
 
@@ -200,7 +219,8 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"حدث خطأ أثناء تحميل القوالب: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"[ERROR] LoadTemplatesAsync: {ex}");
+            ErrorMessage = "حدث خطأ أثناء تحميل القوالب. تأكد من تحديد مجلد صحيح.";
         }
         finally
         {
@@ -234,6 +254,18 @@ public partial class MainViewModel : ObservableObject
 
             if (DraftPreviewText != OriginalTemplateText)
             {
+                if (_docxService.TemplateHasTables(SelectedTemplate.FullPath))
+                {
+                    var proceed = _dialogService.ShowConfirm(
+                        "تعديل النص سيُفقد الجداول",
+                        "يحتوي هذا القالب على جداول. التوليد من النص المعدل سينشئ مستنداً نصياً فقط بدون جداول.\n\nهل تريد المتابعة؟");
+                    if (!proceed)
+                    {
+                        IsGenerating = false;
+                        return;
+                    }
+                }
+
                 resultPath = await _docxService.GenerateDocumentFromPlainTextAsync(
                     DraftPreviewText, values, outputDir, SelectedTemplate.Name);
             }
@@ -255,7 +287,8 @@ public partial class MainViewModel : ObservableObject
         }
         catch (Exception ex)
         {
-            ErrorMessage = $"حدث خطأ أثناء إنشاء المستند: {ex.Message}";
+            System.Diagnostics.Debug.WriteLine($"[ERROR] GenerateDocument: {ex}");
+            ErrorMessage = "حدث خطأ أثناء إنشاء المستند. حاول مرة أخرى أو تأكد من القالب.";
         }
         finally
         {

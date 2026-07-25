@@ -189,15 +189,10 @@
                     </Grid.ColumnDefinitions>
 
                     <Button Grid.Column="0" Height="44"
-                            Command="{Binding GenerateDocumentCommand}" Margin="0,0,6,0">
+                            Command="{Binding GenerateDocumentCommand}" Margin="0,0,6,0"
+                            IsEnabled="{Binding CanGenerate}">
                         <Button.Style>
-                            <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}">
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding HasSelectedTemplate}" Value="False">
-                                        <Setter Property="IsEnabled" Value="False"/>
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
+                            <Style TargetType="Button" BasedOn="{StaticResource PrimaryButton}"/>
                         </Button.Style>
                         <Grid>
                             <TextBlock HorizontalAlignment="Center" VerticalAlignment="Center" FontWeight="SemiBold">
@@ -331,13 +326,27 @@
                         <ItemsControl ItemsSource="{Binding FormFields}"
                                       Visibility="{Binding HasFormFields, Converter={StaticResource BoolToVis}}">
                             <ItemsControl.ItemTemplate>
-                                <DataTemplate DataType="models:PlaceholderField">
-                                    <StackPanel Margin="0,0,0,14">
-                                        <TextBlock Text="{Binding Key}" Style="{StaticResource FieldLabel}"/>
-                                        <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
-                                                 FontFamily="Arial" FontSize="14" Padding="10" MinHeight="36"/>
-                                    </StackPanel>
-                                </DataTemplate>
+                                    <DataTemplate DataType="models:PlaceholderField">
+                                        <StackPanel Margin="0,0,0,14">
+                                            <TextBlock Text="{Binding Key}" Style="{StaticResource FieldLabel}"/>
+                                            <Border BorderThickness="1" CornerRadius="4">
+                                                <Border.Style>
+                                                    <Style TargetType="Border">
+                                                        <Setter Property="BorderBrush" Value="{StaticResource BorderBrush}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding HasError}" Value="True">
+                                                                <Setter Property="BorderBrush" Value="{StaticResource DangerBrush}"/>
+                                                                <Setter Property="Background" Value="#1EFF0000"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </Border.Style>
+                                                <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
+                                                         FontFamily="Arial" FontSize="14" Padding="10" MinHeight="36"
+                                                         BorderThickness="0" Background="Transparent"/>
+                                            </Border>
+                                        </StackPanel>
+                                    </DataTemplate>
                             </ItemsControl.ItemTemplate>
                         </ItemsControl>
 

@@ -33,8 +33,9 @@ public class JsonSettingsService : ISettingsService
                 _data = JsonSerializer.Deserialize<JsonSettingsData>(json) ?? new JsonSettingsData();
             }
         }
-        catch
+        catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"[ERROR] JsonSettingsService.LoadAsync: {ex.Message}");
             _data = new JsonSettingsData();
         }
     }
@@ -46,8 +47,9 @@ public class JsonSettingsService : ISettingsService
             var json = JsonSerializer.Serialize(_data, new JsonSerializerOptions { WriteIndented = true });
             await File.WriteAllTextAsync(_settingsFilePath, json);
         }
-        catch
+        catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"[ERROR] JsonSettingsService.SaveAsync: {ex.Message}");
         }
     }
 

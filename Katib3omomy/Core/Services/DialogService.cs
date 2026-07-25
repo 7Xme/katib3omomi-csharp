@@ -25,6 +25,11 @@ public class DialogService : IDialogService
         MessageBox.Show(message, "خطأ", MessageBoxButton.OK, MessageBoxImage.Error);
     }
 
+    public bool ShowConfirm(string title, string message)
+    {
+        return MessageBox.Show(message, title, MessageBoxButton.YesNo, MessageBoxImage.Question) == MessageBoxResult.Yes;
+    }
+
     public void ShowSuccess(string title, string message)
     {
         MessageBox.Show(message, title, MessageBoxButton.OK, MessageBoxImage.Information);
@@ -42,8 +47,9 @@ public class DialogService : IDialogService
                 UseShellExecute = true
             });
         }
-        catch
+        catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"[ERROR] DialogService.OpenFile: {ex.Message}");
         }
     }
 
@@ -58,8 +64,9 @@ public class DialogService : IDialogService
         {
             Clipboard.SetText(text);
         }
-        catch
+        catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"[ERROR] DialogService.CopyToClipboard: {ex.Message}");
         }
     }
 }

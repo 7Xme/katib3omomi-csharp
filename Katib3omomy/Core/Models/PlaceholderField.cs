@@ -9,4 +9,11 @@ public partial class PlaceholderField : ObservableObject
 
     [ObservableProperty]
     private string _value = string.Empty;
+
+    public bool HasError => string.IsNullOrWhiteSpace(Value);
+
+    partial void OnValueChanged(string value)
+    {
+        OnPropertyChanged(nameof(HasError));
+    }
 }

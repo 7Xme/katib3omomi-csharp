@@ -1,4 +1,5 @@
-﻿using System.Windows;
+﻿using System.Diagnostics;
+using System.Windows;
 using Katib3omomy.Core.Services;
 using Katib3omomy.Infrastructure.Data;
 using Katib3omomy.ViewModels;
@@ -12,6 +13,23 @@ public partial class App : Application
 
     protected override void OnStartup(StartupEventArgs e)
     {
+        DispatcherUnhandledException += (_, args) =>
+        {
+            Debug.WriteLine($"[FATAL] Dispatcher exception: {args.Exception}");
+            MessageBox.Show(
+                "حدث خطأ غير متوقع. يرجى إعادة تشغيل التطبيق.",
+                "خطأ غير متوقع",
+                MessageBoxButton.OK,
+                MessageBoxImage.Error);
+            args.Handled = true;
+        };
+
+        AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+        {
+            var ex = args.ExceptionObject as Exception;
+            Debug.WriteLine($"[FATAL] AppDomain exception: {ex?.Message}");
+        };
+
         var services = new ServiceCollection();
         ConfigureServices(services);
         ServiceProvider = services.BuildServiceProvider();

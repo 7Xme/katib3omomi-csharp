@@ -34,6 +34,20 @@ public partial class DocxPlaceholderService : IDocxPlaceholderService
         return Task.Run(() => GenerateFromPlainText(content, values, outputDir, baseFileName));
     }
 
+    public bool TemplateHasTables(string filePath)
+    {
+        try
+        {
+            using var fs = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using var doc = WordprocessingDocument.Open(fs, false);
+            return doc.MainDocumentPart?.Document?.Body?.Descendants<Table>().Any() == true;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     public bool IsValidDocx(string filePath)
     {
         try
@@ -71,7 +85,7 @@ public partial class DocxPlaceholderService : IDocxPlaceholderService
                 CollectPlaceholders(footerPart.RootElement, placeholders);
         }
 
-        return placeholders.OrderBy(p => p).ToList();
+        return placeholders.ToList();
     }
 
     private static void CollectPlaceholders(OpenXmlElement parent, HashSet<string> placeholders)
