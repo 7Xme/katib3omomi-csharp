@@ -14,6 +14,9 @@
         FlowDirection="RightToLeft"
         Background="#FFF5F5F5"
         FontFamily="Segoe UI"
+        AllowDrop="True"
+        PreviewDragOver="Window_PreviewDragOver"
+        Drop="Window_Drop"
         d:DataContext="{d:DesignInstance vm:MainViewModel, IsDesignTimeCreatable=False}">
 
     <Window.Resources>

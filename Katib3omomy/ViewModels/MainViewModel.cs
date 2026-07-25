@@ -83,7 +83,9 @@ public partial class MainViewModel : ObservableObject
     public IEnumerable<TemplateFile> FilteredTemplates =>
         string.IsNullOrWhiteSpace(SearchQuery)
             ? AllTemplates
-            : AllTemplates.Where(t => t.Name.Contains(SearchQuery, StringComparison.OrdinalIgnoreCase));
+            : AllTemplates.Where(t =>
+                System.Globalization.CultureInfo.CurrentCulture.CompareInfo.IndexOf(
+                    t.Name, SearchQuery, System.Globalization.CompareOptions.IgnoreCase | System.Globalization.CompareOptions.IgnoreNonSpace) >= 0);
 
     public bool CanShowPreview => SelectedTemplate is not null && LastGenerated is null && !IsParsingTemplate;
     public bool CanShowEmpty => SelectedTemplate is null && !IsParsingTemplate;
@@ -183,16 +185,26 @@ public partial class MainViewModel : ObservableObject
     {
         var folder = _dialogService.SelectFolder();
         if (folder is null) return;
-
-        _settingsService.TemplatesFolderPath = folder;
-        await _settingsService.SaveAsync();
-        await LoadTemplatesAsync();
+        await SetTemplatesFolderAsync(folder);
     }
 
     [RelayCommand]
     private async Task LoadTemplates()
     {
         await LoadTemplatesAsync();
+    }
+
+    public async Task SetTemplatesFolderAsync(string path)
+    {
+        _settingsService.TemplatesFolderPath = path;
+        await _settingsService.SaveAsync();
+        await LoadTemplatesAsync();
+    }
+
+    public void SelectTemplateByPath(string filePath)
+    {
+        SelectedTemplate = AllTemplates.FirstOrDefault(t =>
+            string.Equals(t.FullPath, filePath, StringComparison.OrdinalIgnoreCase));
     }
 
     private async Task LoadTemplatesAsync()
