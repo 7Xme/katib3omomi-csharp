@@ -99,7 +99,7 @@ public partial class DocxPlaceholderService : IDocxPlaceholderService
         {
             if (element is Paragraph p)
             {
-                var text = string.Concat(p.Descendants<Text>().Select(t => t.Text)).Trim();
+                var text = ExtractParagraphText(p);
                 if (!string.IsNullOrEmpty(text))
                     sb.AppendLine(text);
             }
@@ -116,6 +116,28 @@ public partial class DocxPlaceholderService : IDocxPlaceholderService
             : result;
     }
 
+    private static string ExtractParagraphText(Paragraph p)
+    {
+        var runs = p.Descendants<Run>().ToList();
+        if (runs.Count == 0) return string.Empty;
+
+        var text = string.Concat(runs.Select(r => r.InnerText)).Trim();
+
+        if (string.IsNullOrEmpty(text)) return string.Empty;
+
+        var hasBiDi = p.GetFirstChild<ParagraphProperties>()?.GetFirstChild<BiDi>() is not null;
+        var hasArabic = text.Any(c => c >= '\u0600' && c <= '\u06FF' ||
+                                      c >= '\u0750' && c <= '\u077F' ||
+                                      c >= '\u08A0' && c <= '\u08FF' ||
+                                      c >= '\uFB50' && c <= '\uFDFF' ||
+                                      c >= '\uFE70' && c <= '\uFEFF');
+
+        if (hasBiDi || hasArabic)
+            text = "\u200F\u202B" + text + "\u202C";
+
+        return text;
+    }
+
     private static void ExtractTableText(Table table, StringBuilder sb)
     {
         foreach (var row in table.Elements<TableRow>())
@@ -124,7 +146,7 @@ public partial class DocxPlaceholderService : IDocxPlaceholderService
             foreach (var cell in row.Elements<TableCell>())
             {
                 var cellText = string.Join(" ", cell.Descendants<Paragraph>()
-                    .Select(pp => string.Concat(pp.Descendants<Text>().Select(t => t.Text))));
+                    .Select(ExtractParagraphText));
                 cells.Add(cellText.Trim());
             }
             sb.AppendLine(string.Join(" \u2022 ", cells.Where(c => !string.IsNullOrEmpty(c))));

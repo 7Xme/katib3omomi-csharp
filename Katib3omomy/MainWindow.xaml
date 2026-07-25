@@ -167,6 +167,7 @@
                                  VerticalScrollBarVisibility="Auto"
                                  Background="#FFF8F9FA" BorderBrush="{StaticResource BorderBrush}"
                                  FontFamily="Arial" FontSize="14.5" TextAlignment="Right"
+                                 FlowDirection="RightToLeft"
                                  Padding="12" MinHeight="200"/>
 
                         <TextBlock Grid.Row="2"
