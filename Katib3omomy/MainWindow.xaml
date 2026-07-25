@@ -540,14 +540,15 @@
                     </ItemsControl>
                 </StackPanel>
 
-                <TextBlock Grid.Row="3" FontWeight="SemiBold" FontSize="14"
-                           Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4"
-                           Text="&#1575;&#1604;&#1576;&#1610;&#1575;&#1606;&#1575;&#1578; &#1575;&#1604;&#1605;&#1591;&#1604;&#1608;&#1576;&#1577;"/>
-
-                <TextBlock Grid.Row="3" FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"
-                           TextWrapping="Wrap" Margin="0,20,0,4"
-                           Text="{Binding CurrentTemplateMeta.Description}"
-                           Visibility="{Binding CurrentTemplateMeta, Converter={StaticResource NullToVis}}"/>
+                <StackPanel Grid.Row="3" Margin="0,0,0,8">
+                    <TextBlock FontWeight="SemiBold" FontSize="14"
+                               Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4"
+                               Text="&#1575;&#1604;&#1576;&#1610;&#1575;&#1606;&#1575;&#1578; &#1575;&#1604;&#1605;&#1591;&#1604;&#1608;&#1576;&#1577;"/>
+                    <TextBlock FontSize="12" Foreground="{StaticResource TextSecondaryBrush}"
+                               TextWrapping="Wrap" Margin="0,0,0,2"
+                               Text="{Binding CurrentTemplateMeta.Description}"
+                               Visibility="{Binding CurrentTemplateMeta, Converter={StaticResource NullToVis}}"/>
+                </StackPanel>
 
                 <ScrollViewer Grid.Row="4" VerticalScrollBarVisibility="Auto" Margin="0,0,0,8">
                     <StackPanel>

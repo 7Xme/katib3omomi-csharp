@@ -1,20 +1,17 @@
 using Katib3omomy.Core.Models;
 using Katib3omomy.Core.Services;
-using Katib3omomy.Infrastructure.Data;
 
 namespace Katib3omomy.Infrastructure.Services;
 
 public class StatsService : IStatsService
 {
     private readonly StatsData _stats;
-    private readonly ITemplateRepository _templateRepo;
     private readonly System.Timers.Timer _timer;
 
     public StatsData Stats => _stats;
 
-    public StatsService(ITemplateRepository templateRepo)
+    public StatsService()
     {
-        _templateRepo = templateRepo;
         _stats = StatsData.Load();
         _stats.SessionStart = DateTime.Now;
 
@@ -47,11 +44,25 @@ public class StatsService : IStatsService
     {
         try
         {
-            return _templateRepository.GetAll().Count();
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            var folder = System.IO.Path.Combine(appData, "Katib3omomy");
+            var settingsPath = System.IO.Path.Combine(folder, "settings.json");
+            if (System.IO.File.Exists(settingsPath))
+            {
+                var json = System.IO.File.ReadAllText(settingsPath);
+                using var doc = System.Text.Json.JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("TemplatesFolderPath", out var pathProp))
+                {
+                    var templatesDir = pathProp.GetString();
+                    if (!string.IsNullOrEmpty(templatesDir) && System.IO.Directory.Exists(templatesDir))
+                    {
+                        return System.IO.Directory.GetFiles(templatesDir, "*.docx").Length;
+                    }
+                }
+            }
         }
-        catch
-        {
-            return 0;
-        }
+        catch { }
+        return 0;
     }
 }
