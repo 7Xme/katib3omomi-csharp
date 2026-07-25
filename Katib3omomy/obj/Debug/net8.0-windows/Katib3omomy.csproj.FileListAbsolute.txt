@@ -1,0 +1,10 @@
+D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\Katib3omomy.csproj.AssemblyReference.cache
+D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\App.baml
+D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\MainWindow.g.cs
+D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\App.g.cs
+D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\GeneratedInternalTypeHelper.g.cs
+D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\Katib3omomy_MarkupCompile.cache
+D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\Katib3omomy_MarkupCompile.lref
+D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\Katib3omomy.dll
+D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\refint\Katib3omomy.dll
+D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\Katib3omomy.pdb

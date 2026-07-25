@@ -1,0 +1,314 @@
+﻿<Window x:Class="Katib3omomy.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:conv="clr-namespace:Katib3omomy.Core.Converters"
+        Title="كاتب عمومي — مولد المستندات الرسمية"
+        Width="1280" Height="800"
+        MinWidth="1000" MinHeight="650"
+        WindowStartupLocation="CenterScreen"
+        FlowDirection="RightToLeft"
+        Background="#FFF5F5F5"
+        FontFamily="Segoe UI">
+    <Window.Resources>
+        <conv:BoolToVisibilityConverter x:Key="BoolToVis"/>
+        <conv:NullToVisibilityConverter x:Key="NullToVis"/>
+        <conv:NullToInverseVisibilityConverter x:Key="NullToInverseVis"/>
+        <conv:StringNotEmptyToVisibilityConverter x:Key="StringNotEmptyToVis"/>
+        <conv:IntZeroToVisibilityConverter x:Key="ZeroToVis"/>
+        <conv:IntNonZeroToVisibilityConverter x:Key="NonZeroToVis"/>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="420"/>
+        </Grid.ColumnDefinitions>
+
+        <!-- LEFT PANEL -->
+        <Grid Grid.Column="0" Background="#FFF5F5F5" Margin="24,0,24,24">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Grid.Row="0" Text="معاينة المستند" FontSize="22" FontWeight="Bold"
+                       Foreground="{StaticResource TextPrimaryBrush}" Margin="0,24,0,16"/>
+
+            <Border Grid.Row="1" Background="{StaticResource CardWhiteBrush}"
+                    BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                    CornerRadius="12" Padding="24" Margin="0,0,0,12">
+
+                <Grid>
+                    <!-- Loading State -->
+                    <StackPanel Visibility="{Binding IsParsingTemplate, Converter={StaticResource BoolToVis}}"
+                                VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <ProgressBar IsIndeterminate="True" Height="4" Width="200" Margin="0,0,0,12"/>
+                        <TextBlock Text="جاري التحميل..." FontSize="16"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   HorizontalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Success State -->
+                    <StackPanel Visibility="{Binding LastGenerated, Converter={StaticResource NullToVis}}">
+                        <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                            <TextBlock Text="✅" FontSize="20" Margin="0,0,8,0"/>
+                            <TextBlock Text="تم إنشاء المستند بنجاح" FontSize="18" FontWeight="SemiBold"
+                                       Foreground="{StaticResource SuccessBrush}"/>
+                        </StackPanel>
+                        <TextBlock FontWeight="SemiBold" Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4">
+                            <Run Text="اسم القالب:"/> <Run Text="{Binding LastGenerated.TemplateName}"/>
+                        </TextBlock>
+                        <TextBlock Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4">
+                            <Run Text="اسم الملف:"/> <Run Text="{Binding LastGenerated.FileName}"/>
+                        </TextBlock>
+                        <TextBlock Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,4">
+                            <Run Text="تاريخ الإنشاء:"/>
+                            <Run Text="{Binding LastGenerated.GeneratedAt, StringFormat='{}{0:yyyy/MM/dd HH:mm}'}"/>
+                        </TextBlock>
+                        <TextBlock Foreground="{StaticResource TextSecondaryBrush}" Margin="0,0,0,16"
+                                   TextWrapping="Wrap" FontSize="12">
+                            <Run Text="مسار الملف:"/> <Run Text="{Binding LastGenerated.FilePath}"/>
+                        </TextBlock>
+                        <Border Background="#FFF0F9FF" CornerRadius="8" Padding="16" Margin="0,0,0,8"
+                                BorderBrush="#FFB3E0FF" BorderThickness="1">
+                            <TextBlock Text="لأفضل جودة طباعة، افتح المستند في Microsoft Word ثم اطبعه."
+                                       Foreground="#FF005A9E" FontSize="12"/>
+                        </Border>
+                    </StackPanel>
+
+                    <!-- Empty State -->
+                    <StackPanel Visibility="{Binding SelectedTemplate, Converter={StaticResource NullToInverseVis}}"
+                                VerticalAlignment="Center" HorizontalAlignment="Center">
+                        <TextBlock Text="📄" FontSize="48" HorizontalAlignment="Center" Foreground="#FFCCCCCC"/>
+                        <TextBlock Text="لم يتم إنشاء أي مستند بعد" FontSize="18"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,12,0,4"/>
+                        <TextBlock Text="اختر قالباً من اليسار واملأ البيانات ثم اضغط إنشاء المستند"
+                                   FontSize="13" Foreground="#FFAAAAAA"
+                                   HorizontalAlignment="Center" TextWrapping="Wrap" TextAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- Preview State -->
+                    <StackPanel Visibility="{Binding ShowPreview, Converter={StaticResource BoolToVis}}">
+                        <Grid Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Grid.Column="0" Text="✏️" FontSize="18" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock Grid.Column="1" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}" VerticalAlignment="Center">
+                                <Run Text="نص القالب (قابل للتعديل المؤقت): "/>
+                                <Run Text="{Binding SelectedTemplate.Name}"/>
+                            </TextBlock>
+                            <Button Grid.Column="2" Content="↻" Style="{StaticResource OutlinedButtonStyle}"
+                                    Command="{Binding ResetDraftCommand}" MinWidth="36" Padding="8"
+                                    Margin="0,0,8,0" ToolTip="إعادة النص الأصلي"/>
+                            <Button Grid.Column="3" Content="📋" Style="{StaticResource OutlinedButtonStyle}"
+                                    Command="{Binding CopyPreviewCommand}" MinWidth="36" Padding="8"
+                                    ToolTip="نسخ النص"/>
+                        </Grid>
+
+                        <TextBox Text="{Binding DraftPreviewText, UpdateSourceTrigger=PropertyChanged}"
+                                 AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto"
+                                 Background="#FFF8F9FA" BorderBrush="{StaticResource BorderBrush}"
+                                 FontSize="14.5" FontFamily="Arial" TextAlignment="Right"
+                                 Padding="12" MinHeight="200"/>
+
+                        <TextBlock Text="معاينة فقط • التعديلات هنا لا تؤثر على المستند • الخط، الحجم، التوافق والتنسيق الأصلي محفوظة 100% من القالب"
+                                   FontSize="10" FontStyle="Italic" Foreground="#FFAAAAAA" Margin="0,8,0,0"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Action Buttons -->
+            <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Stretch">
+                <Button MinWidth="120" Height="44" Command="{Binding GenerateDocumentCommand}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
+                            <Setter Property="Content" Value="إنشاء المستند"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding IsGenerating}" Value="True">
+                                    <Setter Property="Content" Value="جاري الإنشاء..."/>
+                                    <Setter Property="IsEnabled" Value="False"/>
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding SelectedTemplate}" Value="{x:Null}">
+                                    <Setter Property="IsEnabled" Value="False"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Content="📂 فتح المستند" Height="44" Margin="12,0,0,0"
+                        Command="{Binding OpenDocumentCommand}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource OutlinedButtonStyle}">
+                            <Setter Property="IsEnabled" Value="False"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding LastGenerated}" Value="{x:Null}">
+                                    <Setter Property="IsEnabled" Value="False"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+                <Button Content="🖨️ طباعة" Height="44" Margin="12,0,0,0"
+                        Command="{Binding PrintDocumentCommand}">
+                    <Button.Style>
+                        <Style TargetType="Button" BasedOn="{StaticResource OutlinedButtonStyle}">
+                            <Setter Property="IsEnabled" Value="False"/>
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding LastGenerated}" Value="{x:Null}">
+                                    <Setter Property="IsEnabled" Value="False"/>
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Button.Style>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- RIGHT PANEL -->
+        <Grid Grid.Column="1" Background="{StaticResource CardWhiteBrush}">
+            <Border BorderThickness="1,0,0,0" BorderBrush="{StaticResource BorderBrush}">
+                <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="20,24,20,20">
+                    <StackPanel>
+                        <Button Content="📂 اختر مجلد النماذج"
+                                Style="{StaticResource PrimaryButtonStyle}"
+                                Command="{Binding SelectTemplatesFolderCommand}"
+                                Height="40" Margin="0,0,0,16"/>
+
+                        <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                CornerRadius="4" Background="#FFF8F9FA" Margin="0,0,0,12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Grid.Column="0" Text="🔍" VerticalAlignment="Center"
+                                           Margin="10,0,6,0" FontSize="14"
+                                           Foreground="{StaticResource TextSecondaryBrush}"/>
+                                <TextBox Grid.Column="1"
+                                         Text="{Binding SearchQuery, UpdateSourceTrigger=PropertyChanged}"
+                                         BorderThickness="0" Background="Transparent"
+                                         Padding="0" MinHeight="34" FontSize="14"/>
+                                <Button Grid.Column="2" Content="✕"
+                                        Visibility="{Binding SearchQuery, Converter={StaticResource StringNotEmptyToVis}}"
+                                        Command="{Binding ResetSelectionCommand}"
+                                        Background="Transparent" BorderThickness="0"
+                                        Foreground="{StaticResource TextSecondaryBrush}"
+                                        Cursor="Hand" Margin="0,0,4,0" Padding="4"/>
+                            </Grid>
+                        </Border>
+
+                        <TextBlock Text="اختر القالب" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}" Margin="0,0,0,6"/>
+
+                        <Border BorderBrush="{StaticResource BorderBrush}" BorderThickness="1"
+                                CornerRadius="8" Height="180">
+                            <Grid>
+                                <ListBox ItemsSource="{Binding FilteredTemplates}"
+                                         SelectedItem="{Binding SelectedTemplate, Mode=TwoWay}"
+                                         BorderThickness="0" Background="Transparent"
+                                         ScrollViewer.VerticalScrollBarVisibility="Auto">
+                                    <ListBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <Grid>
+                                                <Grid.RowDefinitions>
+                                                    <RowDefinition Height="Auto"/>
+                                                    <RowDefinition Height="Auto"/>
+                                                </Grid.RowDefinitions>
+                                                <TextBlock Grid.Row="0" Text="{Binding Name}"
+                                                           FontWeight="SemiBold" FontSize="14"
+                                                           Foreground="{StaticResource TextPrimaryBrush}"/>
+                                                <TextBlock Grid.Row="1" Text="{Binding FileName}"
+                                                           FontSize="11"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                                           Margin="0,2,0,0"/>
+                                            </Grid>
+                                        </DataTemplate>
+                                    </ListBox.ItemTemplate>
+                                    <ListBox.ItemContainerStyle>
+                                        <Style TargetType="ListBoxItem">
+                                            <Setter Property="Padding" Value="12,10"/>
+                                            <Setter Property="Cursor" Value="Hand"/>
+                                            <Setter Property="Template">
+                                                <Setter.Value>
+                                                    <ControlTemplate TargetType="ListBoxItem">
+                                                        <Border x:Name="Border" Background="Transparent"
+                                                                Padding="{TemplateBinding Padding}">
+                                                            <ContentPresenter/>
+                                                        </Border>
+                                                        <ControlTemplate.Triggers>
+                                                            <Trigger Property="IsSelected" Value="True">
+                                                                <Setter TargetName="Border" Property="Background"
+                                                                        Value="#1E0078D4"/>
+                                                            </Trigger>
+                                                            <Trigger Property="IsMouseOver" Value="True">
+                                                                <Setter TargetName="Border" Property="Background"
+                                                                        Value="#0C000000"/>
+                                                            </Trigger>
+                                                        </ControlTemplate.Triggers>
+                                                    </ControlTemplate>
+                                                </Setter.Value>
+                                            </Setter>
+                                        </Style>
+                                    </ListBox.ItemContainerStyle>
+                                </ListBox>
+
+                                <ProgressBar IsIndeterminate="True" Height="4"
+                                             VerticalAlignment="Bottom"
+                                             Visibility="{Binding IsLoadingTemplates, Converter={StaticResource BoolToVis}}"/>
+                            </Grid>
+                        </Border>
+
+                        <TextBlock Text="البيانات المطلوبة" FontWeight="SemiBold"
+                                   Foreground="{StaticResource TextPrimaryBrush}" Margin="0,16,0,8"/>
+
+                        <ItemsControl ItemsSource="{Binding FormFields}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <StackPanel Margin="0,0,0,14">
+                                        <TextBlock Text="{Binding Key}" FontSize="12"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   Margin="0,0,4,4"/>
+                                        <TextBox Text="{Binding Value, UpdateSourceTrigger=PropertyChanged}"
+                                                 Padding="10" MinHeight="36" FontSize="14"/>
+                                    </StackPanel>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+
+                        <TextBlock Visibility="{Binding FormFields.Count, Converter={StaticResource ZeroToVis}}"
+                                   Text="اختر قالباً من الأعلى لعرض الحقول"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   HorizontalAlignment="Center" Margin="0,24,0,0"/>
+
+                        <StackPanel Visibility="{Binding FormFields.Count, Converter={StaticResource NonZeroToVis}}"
+                                    Orientation="Horizontal" Margin="0,8,0,0">
+                            <Button Content="مسح الحقول" Style="{StaticResource OutlinedButtonStyle}"
+                                    Command="{Binding ClearFormCommand}" FontSize="13"/>
+                            <Button Content="إلغاء التحديد" Style="{StaticResource OutlinedButtonStyle}"
+                                    Command="{Binding ResetSelectionCommand}" FontSize="13" Margin="8,0,0,0"/>
+                        </StackPanel>
+
+                        <Border Visibility="{Binding ErrorMessage, Converter={StaticResource StringNotEmptyToVis}}"
+                                Background="#FFFDECEA" BorderBrush="#FFD32F2F"
+                                BorderThickness="1" CornerRadius="8" Padding="12" Margin="0,12,0,0">
+                            <TextBlock Text="{Binding ErrorMessage}" Foreground="#FFD32F2F"
+                                       TextWrapping="Wrap" FontSize="13"/>
+                        </Border>
+
+                        <TextBlock Text="{Binding StatusText}"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontSize="12" HorizontalAlignment="Center" Margin="0,16,0,0"/>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Grid>
+    </Grid>
+</Window>
