@@ -29,9 +29,9 @@ public partial class DocxPlaceholderService : IDocxPlaceholderService
         return Task.Run(() => GenerateDocument(templatePath, values, outputDir, baseFileName));
     }
 
-    public Task<string> GenerateDocumentFromPlainTextAsync(string content, Dictionary<string, string> values, string outputDir, string baseFileName)
+    public Task<string> GenerateDocumentFromPlainTextAsync(string content, Dictionary<string, string> values, string outputDir, string baseFileName, string? templatePath = null)
     {
-        return Task.Run(() => GenerateFromPlainText(content, values, outputDir, baseFileName));
+        return Task.Run(() => GenerateFromPlainText(content, values, outputDir, baseFileName, templatePath));
     }
 
     public bool TemplateHasTables(string filePath)
@@ -358,57 +358,122 @@ public partial class DocxPlaceholderService : IDocxPlaceholderService
             rPr.Append(new RightToLeftText());
     }
 
-    private string GenerateFromPlainText(string content, Dictionary<string, string> values, string outputDir, string baseFileName)
+    private string GenerateFromPlainText(string content, Dictionary<string, string> values, string outputDir, string baseFileName, string? templatePath = null)
     {
         string result = content;
         foreach (var kvp in values)
             result = result.Replace($"*{kvp.Key}*", $"\u200F\u202B{kvp.Value}\u202C");
 
-        var ms = new MemoryStream();
-        using (var doc = WordprocessingDocument.Create(ms, WordprocessingDocumentType.Document, true))
+        MemoryStream ms;
+        var modifiedLines = result.Split('\n').Select(l => l.Trim()).Where(l => l.Length > 0).ToList();
+
+        if (!string.IsNullOrEmpty(templatePath) && File.Exists(templatePath))
         {
-            var mainPart = doc.AddMainDocumentPart();
-            mainPart.Document = new Document();
-            var body = new Body();
+            ms = new MemoryStream();
+            using (var fs = new FileStream(templatePath, FileMode.Open, FileAccess.Read, FileShare.Read))
+                fs.CopyTo(ms);
+            ms.Position = 0;
 
-            var lines = result.Split('\n');
-            foreach (var line in lines)
+            using (var doc = WordprocessingDocument.Open(ms, true))
             {
-                var trimmed = line.Trim();
-                if (string.IsNullOrEmpty(trimmed)) continue;
+                var body = doc.MainDocumentPart?.Document?.Body;
+                if (body is not null)
+                {
+                    var paras = body.Elements<Paragraph>().ToList();
+                    int paraCount = Math.Min(paras.Count, modifiedLines.Count);
+                    for (int i = 0; i < paraCount; i++)
+                    {
+                        var existingText = string.Concat(paras[i].Descendants<Text>().Select(t => t.Text));
+                        if (string.IsNullOrWhiteSpace(existingText)) continue;
 
-                var paragraph = new Paragraph();
-                var pPr = new ParagraphProperties();
-                pPr.Append(new BiDi());
-                paragraph.Append(pPr);
+                        var runs = paras[i].Elements<Run>().ToList();
+                        if (runs.Count > 0)
+                        {
+                            foreach (var text in runs[0].Descendants<Text>().ToList())
+                                text.Text = "";
 
-                var run = new Run();
-                var rPr = new RunProperties();
-                rPr.Append(new RunFonts { Ascii = "Arial", HighAnsi = "Arial", ComplexScript = "Arial" });
-                rPr.Append(new FontSize { Val = "28" });
-                rPr.Append(new FontSizeComplexScript { Val = "28" });
-                rPr.Append(new RightToLeftText());
-                run.Append(rPr);
-                run.Append(new Text(trimmed) { Space = SpaceProcessingModeValues.Preserve });
-                paragraph.Append(run);
-                body.Append(paragraph);
+                            var firstRun = runs[0];
+                            var rPr = firstRun.GetFirstChild<RunProperties>();
+                            if (rPr is null)
+                            {
+                                rPr = new RunProperties();
+                                firstRun.InsertAt(rPr, 0);
+                            }
+                            if (rPr.GetFirstChild<RightToLeftText>() is null)
+                                rPr.Append(new RightToLeftText());
+
+                            firstRun.Append(new Text(modifiedLines[i]) { Space = SpaceProcessingModeValues.Preserve });
+                        }
+                        else
+                        {
+                            var run = new Run();
+                            var rPr = new RunProperties();
+                            rPr.Append(new RunFonts { Ascii = "Arial", HighAnsi = "Arial", ComplexScript = "Arial" });
+                            rPr.Append(new FontSize { Val = "28" });
+                            rPr.Append(new FontSizeComplexScript { Val = "28" });
+                            rPr.Append(new RightToLeftText());
+                            run.Append(rPr);
+                            run.Append(new Text(modifiedLines[i]) { Space = SpaceProcessingModeValues.Preserve });
+                            paras[i].Append(run);
+                        }
+
+                        var pPr = paras[i].GetFirstChild<ParagraphProperties>();
+                        if (pPr is null)
+                        {
+                            pPr = new ParagraphProperties();
+                            paras[i].InsertAt(pPr, 0);
+                        }
+                        if (pPr.GetFirstChild<BiDi>() is null)
+                            pPr.Append(new BiDi());
+                    }
+                }
+                doc.Save();
             }
-
-            var sectPr = new SectionProperties();
-            sectPr.Append(new PageSize { Width = 11906, Height = 16838 });
-            sectPr.Append(new PageMargin
+        }
+        else
+        {
+            ms = new MemoryStream();
+            using (var doc = WordprocessingDocument.Create(ms, WordprocessingDocumentType.Document, true))
             {
-                Top = 1134,
-                Right = (UInt32Value)1134U,
-                Bottom = 1134,
-                Left = (UInt32Value)1134U,
-                Header = 0U,
-                Footer = 0U
-            });
-            body.Append(sectPr);
+                var mainPart = doc.AddMainDocumentPart();
+                mainPart.Document = new Document();
+                var body = new Body();
 
-            mainPart.Document.Append(body);
-            mainPart.Document.Save();
+                foreach (var line in modifiedLines)
+                {
+                    var paragraph = new Paragraph();
+                    var pPr = new ParagraphProperties();
+                    pPr.Append(new BiDi());
+                    paragraph.Append(pPr);
+
+                    var run = new Run();
+                    var rPr = new RunProperties();
+                    rPr.Append(new RunFonts { Ascii = "Arial", HighAnsi = "Arial", ComplexScript = "Arial" });
+                    rPr.Append(new FontSize { Val = "28" });
+                    rPr.Append(new FontSizeComplexScript { Val = "28" });
+                    rPr.Append(new RightToLeftText());
+                    run.Append(rPr);
+                    run.Append(new Text(line) { Space = SpaceProcessingModeValues.Preserve });
+                    paragraph.Append(run);
+                    body.Append(paragraph);
+                }
+
+                var sectPr = new SectionProperties();
+                sectPr.Append(new PageSize { Width = 11906, Height = 16838 });
+                sectPr.Append(new PageMargin
+                {
+                    Top = 1134,
+                    Right = (UInt32Value)1134U,
+                    Bottom = 1134,
+                    Left = (UInt32Value)1134U,
+                    Header = 0U,
+                    Footer = 0U
+                });
+                body.Append(sectPr);
+
+                mainPart.Document.Append(body);
+                mainPart.Document.Save();
+            }
         }
 
         ms.Position = 0;

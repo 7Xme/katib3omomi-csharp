@@ -1,10 +1,3 @@
-D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\Katib3omomy.csproj.AssemblyReference.cache
-D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\App.baml
-D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\MainWindow.g.cs
-D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\App.g.cs
-D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\GeneratedInternalTypeHelper.g.cs
-D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\Katib3omomy_MarkupCompile.cache
-D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\Katib3omomy_MarkupCompile.lref
 D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\bin\Debug\net8.0-windows\Katib3omomy.exe
 D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\bin\Debug\net8.0-windows\Katib3omomy.deps.json
 D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\bin\Debug\net8.0-windows\Katib3omomy.runtimeconfig.json
@@ -16,6 +9,13 @@ D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\bin\Deb
 D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\bin\Debug\net8.0-windows\Microsoft.Extensions.DependencyInjection.dll
 D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\bin\Debug\net8.0-windows\Microsoft.Extensions.DependencyInjection.Abstractions.dll
 D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\bin\Debug\net8.0-windows\System.IO.Packaging.dll
+D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\Katib3omomy.csproj.AssemblyReference.cache
+D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\App.baml
+D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\MainWindow.g.cs
+D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\App.g.cs
+D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\GeneratedInternalTypeHelper.g.cs
+D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\Katib3omomy_MarkupCompile.cache
+D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\Katib3omomy_MarkupCompile.lref
 D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\MainWindow.baml
 D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\Katib3omomy.g.resources
 D:\githubprojects\MKTABA TOOLS ALL IN ONE\katib3omomi csharp\Katib3omomy\obj\Debug\net8.0-windows\Katib3omomy.GeneratedMSBuildEditorConfig.editorconfig

@@ -270,7 +270,7 @@ public partial class MainViewModel : ObservableObject
     public bool CanShowPrintPreview => SelectedTemplate is not null && LastGenerated is null && !IsParsingTemplate && !IsEditingTemplate && IsPrintPreview;
     public bool CanShowEmpty => SelectedTemplate is null && !IsParsingTemplate;
     public bool HasFormFields => FormFields.Count > 0;
-    public bool CanGenerate => HasFormFields && FormFields.All(f => !f.HasError);
+    public bool CanGenerate => HasFormFields;
     public bool IsDraftModified => DraftPreviewText != OriginalTemplateText;
     public bool HasSelectedTemplate => SelectedTemplate is not null;
     public bool HasLastGenerated => LastGenerated is not null;
@@ -595,7 +595,7 @@ public partial class MainViewModel : ObservableObject
                 }
 
                 resultPath = await _docxService.GenerateDocumentFromPlainTextAsync(
-                    DraftPreviewText, values, outputDir, SelectedTemplate.Name);
+                    DraftPreviewText, values, outputDir, SelectedTemplate.Name, SelectedTemplate.FullPath);
             }
             else
             {
@@ -676,6 +676,13 @@ public partial class MainViewModel : ObservableObject
     private void TogglePrintPreview()
     {
         IsPrintPreview = !IsPrintPreview;
+    }
+
+    [RelayCommand]
+    private void BackToEdit()
+    {
+        LastGenerated = null;
+        IsPrintPreview = false;
     }
 
     [RelayCommand]

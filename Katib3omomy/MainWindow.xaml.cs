@@ -138,8 +138,9 @@ public partial class MainWindow : Window
 
     private void FontSizeCombo_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (EditorRichTextBox?.Selection is null) return;
         if (FontSizeCombo.SelectedItem is ComboBoxItem item &&
-            double.TryParse(item.Content.ToString(), out double size))
+            double.TryParse(item.Content?.ToString(), out double size))
         {
             EditorRichTextBox.Selection.ApplyPropertyValue(
                 System.Windows.Controls.RichTextBox.FontSizeProperty, size);
